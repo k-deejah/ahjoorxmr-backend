@@ -23,10 +23,15 @@ describe('POST /api/v1/groups/:id/payout (e2e)', () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [
         TypeOrmModule.forRoot({
-          type: 'sqlite',
-          database: ':memory:',
+          type: 'postgres',
+          host: process.env.DB_TEST_HOST || 'localhost',
+          port: parseInt(process.env.DB_TEST_PORT || '5432', 10),
+          username: process.env.DB_TEST_USERNAME || 'postgres',
+          password: process.env.DB_TEST_PASSWORD || 'postgres',
+          database: process.env.DB_TEST_NAME || 'ahjoorxmr_test',
           entities: [Group, Membership, Notification, User],
           synchronize: true,
+          dropSchema: true,
         }),
         MembershipsModule,
         NotificationsModule,
