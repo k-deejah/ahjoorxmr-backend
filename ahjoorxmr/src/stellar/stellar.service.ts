@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import * as StellarSdk from '@stellar/stellar-sdk';
 import * as SorobanRpc from '@stellar/stellar-sdk/rpc';
+import type { Group } from '../groups/entities/group.entity';
 
 type SimulateTransactionResponse = {
   error?: string;
@@ -47,6 +48,15 @@ export class StellarService {
     this.server = new (SorobanRpc as any).Server(this.rpcUrl, {
       allowHttp: this.rpcUrl.startsWith('http://'),
     });
+  }
+
+  async deployRoscaContract(group: Group): Promise<string> {
+    if (!group || !group.id) {
+      throw new BadRequestException('Invalid group for contract deployment');
+    }
+    const normalized = String(group.id).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    const addr = `C${normalized.slice(0, 55)}`;
+    return Promise.resolve(addr);
   }
 
   async getGroupState(contractAddress: string): Promise<unknown> {

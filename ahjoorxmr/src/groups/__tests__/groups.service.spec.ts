@@ -15,6 +15,7 @@ import { WinstonLogger } from '../../common/logger/winston.logger';
 import { CreateGroupDto } from '../dto/create-group.dto';
 import { UpdateGroupDto } from '../dto/update-group.dto';
 import { NotificationsService } from '../../notification/notifications.service';
+import { StellarService } from '../../stellar/stellar.service';
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -100,6 +101,7 @@ describe('GroupsService', () => {
   let membershipRepository: MockRepository<Membership>;
   let logger: MockLogger;
   let notificationsService: Partial<NotificationsService>;
+  let stellarService: Partial<StellarService>;
 
   beforeEach(async () => {
     groupRepository = createMockRepository<Group>();
@@ -107,6 +109,9 @@ describe('GroupsService', () => {
     logger = createMockLogger();
     notificationsService = {
       notify: jest.fn().mockResolvedValue({}),
+    };
+    stellarService = {
+      deployRoscaContract: jest.fn().mockResolvedValue('CFAKEADDRESS123'),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -127,6 +132,10 @@ describe('GroupsService', () => {
         {
           provide: NotificationsService,
           useValue: notificationsService,
+        },
+        {
+          provide: StellarService,
+          useValue: stellarService,
         },
       ],
     }).compile();
@@ -508,11 +517,47 @@ describe('GroupsService', () => {
           currentRound: 1,
         }),
       );
+      expect(stellarService.deployRoscaContract).toHaveBeenCalledWith(
+        expect.objectContaining({ id: groupId }),
+      );
+      expect(result.contractAddress).toBe('CFAKEADDRESS123');
       expect(result.status).toBe(GroupStatus.ACTIVE);
       expect(result.currentRound).toBe(1);
-      expect(logger.log).toHaveBeenCalledWith(
-        expect.stringContaining('activated successfully'),
-        'GroupsService',
+      expect(logger.log).toHaveBeenCalled();
+    });
+
+    it('should rollback to PENDING if contract deployment fails', async () => {
+      const mockGroup = createMockGroup({
+        status: GroupStatus.PENDING,
+        currentRound: 0,
+        minMembers: 2,
+        memberships: [
+          createMockMembership({ id: 'member-1' }),
+          createMockMembership({ id: 'member-2' }),
+        ],
+      });
+      const activatedGroup = {
+        ...mockGroup,
+        status: GroupStatus.ACTIVE,
+        currentRound: 1,
+      } as Group;
+      groupRepository.findOne!.mockResolvedValue(mockGroup);
+      groupRepository.save!
+        .mockResolvedValueOnce(activatedGroup)
+        .mockResolvedValueOnce({ ...mockGroup } as Group);
+      (stellarService.deployRoscaContract as jest.Mock).mockRejectedValue(
+        new Error('deploy failed'),
+      );
+
+      await expect(service.activateGroup(groupId, adminWallet)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(groupRepository.save).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          status: GroupStatus.PENDING,
+          currentRound: 0,
+        }),
       );
     });
 

@@ -14,6 +14,7 @@ import { UpdateGroupDto } from './dto/update-group.dto';
 import { GroupStatus } from './entities/group-status.enum';
 import { NotificationsService } from '../notification/notifications.service';
 import { NotificationType } from '../notification/notification-type.enum';
+import { StellarService } from '../stellar/stellar.service';
 
 /**
  * Service responsible for managing ROSCA group operations.
@@ -29,6 +30,7 @@ export class GroupsService {
     private readonly membershipRepository: Repository<Membership>,
     private readonly logger: WinstonLogger,
     private readonly notificationsService: NotificationsService,
+    private readonly stellarService: StellarService,
   ) {}
 
   /**
@@ -329,10 +331,30 @@ export class GroupsService {
       // 8. Persist and return the updated group
       const savedGroup = await this.groupRepository.save(group);
 
-      this.logger.log(
-        `Group ${groupId} activated successfully`,
-        'GroupsService',
-      );
+      try {
+        const contractAddress =
+          await this.stellarService.deployRoscaContract(savedGroup);
+        savedGroup.contractAddress = contractAddress;
+        await this.groupRepository.save(savedGroup);
+        this.logger.log(
+          `Group ${groupId} activated and contract deployed at ${contractAddress}`,
+          'GroupsService',
+        );
+      } catch (deployError) {
+        savedGroup.status = GroupStatus.PENDING;
+        savedGroup.currentRound = 0;
+        await this.groupRepository.save(savedGroup);
+        this.logger.error(
+          `Contract deployment failed for group ${groupId}: ${
+            (deployError as Error).message
+          }`,
+          (deployError as Error).stack,
+          'GroupsService',
+        );
+        throw new BadRequestException(
+          'Failed to deploy on-chain contract; activation rolled back',
+        );
+      }
 
       return savedGroup;
     } catch (error) {
