@@ -66,6 +66,18 @@ export class ReadinessChecksDto {
   database: string;
 
   @ApiProperty({
+    description: 'Database response time',
+    example: '15ms',
+  })
+  databaseResponseTime: string;
+
+  @ApiProperty({
+    description: 'Database connection pool status',
+    example: { active: 2, idle: 8 },
+  })
+  connectionPool: any;
+
+  @ApiProperty({
     description: 'Memory usage information',
     type: MemoryUsageDto,
   })

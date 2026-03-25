@@ -8,6 +8,8 @@ import { User } from '../users/entities/user.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import { ApiKeyGuard } from './guards/api-key.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { StellarModule } from '../stellar/stellar.module';
+import { ConfigModule } from '@nestjs/config';
 
 /**
  * ContributionsModule manages member contributions in a group-based ROSCA system.
@@ -15,7 +17,11 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
  * Enforces business rules around duplicate prevention and data integrity.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Contribution, Group, User])],
+  imports: [
+    TypeOrmModule.forFeature([Contribution, Group, User]),
+    StellarModule,
+    ConfigModule,
+  ],
   controllers: [ContributionsController],
   providers: [ContributionsService, WinstonLogger, ApiKeyGuard, JwtAuthGuard],
   exports: [ContributionsService],

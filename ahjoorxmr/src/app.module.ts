@@ -1,31 +1,40 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { RedisModule } from './common/redis/redis.module';
+import { CacheInterceptor } from './common/interceptors/cache.interceptor';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { StellarAuthModule } from './stellar-auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { GroupsModule } from './groups/groups.module';
 import { MembershipsModule } from './memberships/memberships.module';
 import { ContributionsModule } from './contributions/contributions.module';
-import { AuditModule } from './audit/audit.module';
-import { GroupsModule } from './groups/groups.module';
-import { QueueModule } from './bullmq/queue.module';
+import { RedisModule } from './common/redis/redis.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 import { Membership } from './memberships/entities/membership.entity';
 import { Group } from './groups/entities/group.entity';
 import { User } from './users/entities/user.entity';
 import { Contribution } from './contributions/entities/contribution.entity';
 import { AuditLog } from './audit/entities/audit-log.entity';
-import { JwtAuthGuard } from './stellar-auth/jwt-auth.guard';
+import { StellarModule } from './stellar/stellar.module';
+import { EventListenerModule } from './event-listener/event-listener.module';
+import { CustomThrottlerModule } from './throttler/throttler.module';
+import { AuditModule } from './audit/audit.module';
+import { SeedModule } from './database/seeds/seed.module';
 
 @Module({
   imports: [
+    // ConfigModule must be first to make environment variables available
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
     }),
+
+    // TypeORM configuration with PostgreSQL
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
@@ -45,22 +54,29 @@ import { JwtAuthGuard } from './stellar-auth/jwt-auth.guard';
       },
       inject: [ConfigService],
     }),
+
+    // RedisModule for caching and session management
+    RedisModule,
+    CustomThrottlerModule,
+    SchedulerModule,
     HealthModule,
     AuthModule,
     StellarAuthModule,
     UsersModule,
+    GroupsModule,
     MembershipsModule,
     ContributionsModule,
+    StellarModule,
+    EventListenerModule,
     AuditModule,
-    GroupsModule,
-    QueueModule,
+    SeedModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     {
-      provide: APP_GUARD,
-      useClass: JwtAuthGuard,
+      provide: APP_INTERCEPTOR,
+      useClass: CacheInterceptor,
     },
   ],
 })

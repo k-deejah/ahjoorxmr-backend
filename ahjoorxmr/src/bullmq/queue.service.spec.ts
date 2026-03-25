@@ -35,9 +35,18 @@ describe('QueueService', () => {
       providers: [
         QueueService,
         { provide: getQueueToken(QUEUE_NAMES.EMAIL), useValue: emailQueue },
-        { provide: getQueueToken(QUEUE_NAMES.EVENT_SYNC), useValue: eventSyncQueue },
-        { provide: getQueueToken(QUEUE_NAMES.GROUP_SYNC), useValue: groupSyncQueue },
-        { provide: getQueueToken(QUEUE_NAMES.DEAD_LETTER), useValue: deadLetterQueue },
+        {
+          provide: getQueueToken(QUEUE_NAMES.EVENT_SYNC),
+          useValue: eventSyncQueue,
+        },
+        {
+          provide: getQueueToken(QUEUE_NAMES.GROUP_SYNC),
+          useValue: groupSyncQueue,
+        },
+        {
+          provide: getQueueToken(QUEUE_NAMES.DEAD_LETTER),
+          useValue: deadLetterQueue,
+        },
       ],
     }).compile();
 
@@ -188,7 +197,9 @@ describe('QueueService', () => {
       expect(result.deadLetter).toBeDefined();
       expect(result.retrievedAt).toBeDefined();
 
-      const emailStats = result.queues.find((q) => q.name === QUEUE_NAMES.EMAIL);
+      const emailStats = result.queues.find(
+        (q) => q.name === QUEUE_NAMES.EMAIL,
+      );
       expect(emailStats).toMatchObject({
         name: QUEUE_NAMES.EMAIL,
         waiting: 5,
@@ -203,7 +214,12 @@ describe('QueueService', () => {
     it('should call count methods on all queues', async () => {
       await service.getStats();
 
-      for (const queue of [emailQueue, eventSyncQueue, groupSyncQueue, deadLetterQueue]) {
+      for (const queue of [
+        emailQueue,
+        eventSyncQueue,
+        groupSyncQueue,
+        deadLetterQueue,
+      ]) {
         expect(queue.getWaitingCount).toHaveBeenCalled();
         expect(queue.getActiveCount).toHaveBeenCalled();
         expect(queue.getFailedCount).toHaveBeenCalled();

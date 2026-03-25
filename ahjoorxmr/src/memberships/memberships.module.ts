@@ -6,6 +6,8 @@ import { Membership } from './entities/membership.entity';
 import { Group } from '../groups/entities/group.entity';
 import { User } from '../users/entities/user.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
+import { NotificationsModule } from '../notification/notifications.module';
+import { JwtAuthGuard } from '../groups/guards/jwt-auth.guard';
 
 /**
  * MembershipsModule manages the relationship between users and ROSCA groups.
@@ -13,9 +15,12 @@ import { WinstonLogger } from '../common/logger/winston.logger';
  * Enforces business rules around membership lifecycle and data integrity.
  */
 @Module({
-  imports: [TypeOrmModule.forFeature([Membership, Group, User])],
+  imports: [
+    TypeOrmModule.forFeature([Membership, Group, User]),
+    NotificationsModule,
+  ],
   controllers: [MembershipsController],
-  providers: [MembershipsService, WinstonLogger],
+  providers: [MembershipsService, WinstonLogger, JwtAuthGuard],
   exports: [MembershipsService],
 })
 export class MembershipsModule {}

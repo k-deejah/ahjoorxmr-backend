@@ -1,7 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue, JobsOptions } from 'bullmq';
-import { QUEUE_NAMES, JOB_NAMES, RETRY_CONFIG, BACKOFF_DELAYS } from './queue.constants';
+import {
+  QUEUE_NAMES,
+  JOB_NAMES,
+  RETRY_CONFIG,
+  BACKOFF_DELAYS,
+} from './queue.constants';
 import {
   SendEmailJobData,
   SendNotificationEmailJobData,
@@ -51,7 +56,8 @@ export class QueueService {
     @InjectQueue(QUEUE_NAMES.EMAIL) private readonly emailQueue: Queue,
     @InjectQueue(QUEUE_NAMES.EVENT_SYNC) private readonly eventSyncQueue: Queue,
     @InjectQueue(QUEUE_NAMES.GROUP_SYNC) private readonly groupSyncQueue: Queue,
-    @InjectQueue(QUEUE_NAMES.DEAD_LETTER) private readonly deadLetterQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.DEAD_LETTER)
+    private readonly deadLetterQueue: Queue,
   ) {}
 
   // ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Version } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import {
   ApiTags,
   ApiOperation,
@@ -11,15 +12,17 @@ import {
   InternalServerErrorResponseDto,
   ValidationErrorResponseDto,
 } from '../common/dto/error-response.dto';
-
-// Mock guard for demonstration - replace with actual auth guard
-class JwtAuthGuard {}
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Users')
 @Controller('users')
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
   @Get()
-  @UseGuards(JwtAuthGuard)
+  @Version('1')
+  @Roles('admin')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary: 'Get paginated list of users',

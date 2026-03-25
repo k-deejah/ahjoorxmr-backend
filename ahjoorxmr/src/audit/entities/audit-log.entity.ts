@@ -1,20 +1,41 @@
-import { Entity, Column } from 'typeorm';
-import { BaseEntity } from '../../common/entities/base.entity';
+import {
+  Entity,
+  Column,
+  PrimaryGeneratedColumn,
+  CreateDateColumn,
+  Index,
+} from 'typeorm';
 
 @Entity('audit_logs')
-export class AuditLog extends BaseEntity {
+@Index(['userId'])
+@Index(['action'])
+@Index(['resource'])
+@Index(['createdAt'])
+export class AuditLog {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ nullable: true })
+  userId: string;
+
   @Column()
   action: string;
 
   @Column()
-  entityType: string;
-
-  @Column()
-  entityId: string;
-
-  @Column()
-  userId: string;
+  resource: string;
 
   @Column({ type: 'jsonb', nullable: true })
-  metadata: Record<string, any> | null;
+  metadata: Record<string, any>;
+
+  @CreateDateColumn()
+  timestamp: Date;
+
+  @Column({ nullable: true })
+  ipAddress: string;
+
+  @Column({ type: 'text', nullable: true })
+  userAgent: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  requestPayload: Record<string, any>;
 }

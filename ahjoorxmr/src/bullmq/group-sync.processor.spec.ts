@@ -4,7 +4,11 @@ import { GroupSyncProcessor } from '../../queue/processors/group-sync.processor'
 import { DeadLetterService } from '../../queue/dead-letter.service';
 import { JOB_NAMES, QUEUE_NAMES } from '../../queue/queue.constants';
 
-const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job =>
+const makeJob = (
+  name: string,
+  data: unknown,
+  overrides: Partial<Job> = {},
+): Job =>
   ({
     id: 'grp-job-id',
     name,
@@ -12,7 +16,7 @@ const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job
     attemptsMade: 0,
     opts: { attempts: 3 },
     ...overrides,
-  } as unknown as Job);
+  }) as unknown as Job;
 
 describe('GroupSyncProcessor', () => {
   let processor: GroupSyncProcessor;
@@ -95,7 +99,10 @@ describe('GroupSyncProcessor', () => {
         { groupId: 'g1', contractAddress: '0x', chainId: 1 },
         { attemptsMade: 3, opts: { attempts: 3 } } as any,
       );
-      await processor.onFailed(job, new Error('contract call permanently failed'));
+      await processor.onFailed(
+        job,
+        new Error('contract call permanently failed'),
+      );
       expect(deadLetterService.moveToDeadLetter).toHaveBeenCalledWith(
         job,
         expect.any(Error),

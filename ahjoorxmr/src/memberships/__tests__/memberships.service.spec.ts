@@ -11,6 +11,8 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
+import { NotificationsService } from '../../notification/notifications.service';
+import { GroupStatus } from '../../groups/entities/group-status.enum';
 
 /**
  * Mock factory for creating Membership entities with default values.
@@ -25,6 +27,7 @@ const createMockMembership = (overrides?: Partial<Membership>): Membership => {
     payoutOrder: 0,
     hasReceivedPayout: false,
     hasPaidCurrentRound: false,
+    transactionHash: null,
     status: MembershipStatus.ACTIVE,
     createdAt: new Date('2024-01-01T00:00:00Z'),
     updatedAt: new Date('2024-01-01T00:00:00Z'),
@@ -42,10 +45,12 @@ const createMockMembership = (overrides?: Partial<Membership>): Membership => {
 const createMockGroup = (overrides?: Partial<Group>): Group => {
   const defaultGroup: Group = {
     id: '123e4567-e89b-12d3-a456-426614174001',
-    status: 'PENDING',
+    name: 'Test Group',
+    contributionAmount: '100',
+    status: GroupStatus.PENDING,
   };
 
-  return { ...defaultGroup, ...overrides };
+  return { ...defaultGroup, ...overrides } as Group;
 };
 
 /**
@@ -87,12 +92,16 @@ describe('MembershipsService', () => {
   let membershipRepository: MockRepository<Membership>;
   let groupRepository: MockRepository<Group>;
   let logger: MockLogger;
+  let notificationsService: Partial<NotificationsService>;
 
   beforeEach(async () => {
     // Create mock instances
     membershipRepository = createMockRepository<Membership>();
     groupRepository = createMockRepository<Group>();
     logger = createMockLogger();
+    notificationsService = {
+      notify: jest.fn().mockResolvedValue({}),
+    };
 
     // Create testing module with mocked dependencies
     const module: TestingModule = await Test.createTestingModule({
@@ -109,6 +118,10 @@ describe('MembershipsService', () => {
         {
           provide: WinstonLogger,
           useValue: logger,
+        },
+        {
+          provide: NotificationsService,
+          useValue: notificationsService,
         },
       ],
     }).compile();
@@ -177,7 +190,81 @@ describe('MembershipsService', () => {
     it('should create a mock group with overrides', () => {
       const group = createMockGroup({ status: 'ACTIVE' });
 
-      expect(group.status).toBe('ACTIVE');
+      expect(group.status).toBe(GroupStatus.ACTIVE);
+    });
+  });
+
+  describe('recordPayout', () => {
+    const groupId = '123e4567-e89b-12d3-a456-426614174001';
+    const userId = '123e4567-e89b-12d3-a456-426614174002';
+    const txHash = '0xabcdef1234567890';
+
+    it('should record payout successfully', async () => {
+      const group = createMockGroup({ status: GroupStatus.ACTIVE });
+      const membership = createMockMembership({ hasReceivedPayout: false });
+      const updatedMembership = {
+        ...membership,
+        hasReceivedPayout: true,
+        transactionHash: txHash,
+      };
+
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(membership);
+      membershipRepository.save!.mockResolvedValue(updatedMembership);
+
+      const result = await service.recordPayout(groupId, userId, txHash);
+
+      expect(result.hasReceivedPayout).toBe(true);
+      expect(result.transactionHash).toBe(txHash);
+      expect(notificationsService.notify).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId,
+          type: 'payout_received',
+          title: 'Payout Received',
+        }),
+      );
+    });
+
+    it('should throw NotFoundException when group does not exist', async () => {
+      groupRepository.findOne!.mockResolvedValue(null);
+
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when group is not ACTIVE', async () => {
+      const group = createMockGroup({ status: GroupStatus.PENDING });
+      groupRepository.findOne!.mockResolvedValue(group);
+
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException when membership does not exist', async () => {
+      const group = createMockGroup({ status: GroupStatus.ACTIVE });
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(null);
+
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw ConflictException when member already received payout', async () => {
+      const group = createMockGroup({ status: GroupStatus.ACTIVE });
+      const membership = createMockMembership({ hasReceivedPayout: true });
+
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(membership);
+
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(ConflictException);
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow('Member has already received payout');
     });
   });
 

@@ -2,7 +2,10 @@ import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES, JOB_NAMES, BACKOFF_DELAYS } from '../queue.constants';
-import { SyncGroupStateJobData, SyncAllGroupsJobData } from '../queue.interfaces';
+import {
+  SyncGroupStateJobData,
+  SyncAllGroupsJobData,
+} from '../queue.interfaces';
 import { DeadLetterService } from '../dead-letter.service';
 
 @Processor(QUEUE_NAMES.GROUP_SYNC, {
@@ -84,5 +87,7 @@ export class GroupSyncProcessor extends WorkerHost {
 }
 
 export function groupSyncBackoffStrategy(attemptsMade: number): number {
-  return BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1];
+  return (
+    BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
+  );
 }

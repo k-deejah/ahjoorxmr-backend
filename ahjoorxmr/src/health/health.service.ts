@@ -3,10 +3,13 @@ import {
   HealthResponseDto,
   ReadinessResponseDto,
 } from './dto/health-response.dto';
+import { DatabaseHealthService } from './database-health.service';
 
 @Injectable()
 export class HealthService {
-  getHealthStatus(): HealthResponseDto {
+  constructor(private readonly databaseHealthService: DatabaseHealthService) {}
+
+  async getHealthStatus(): Promise<HealthResponseDto> {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
@@ -16,16 +19,24 @@ export class HealthService {
     };
   }
 
-  getReadinessStatus(): ReadinessResponseDto {
-    // Add any readiness checks here (database connections, external services, etc.)
+  async getReadinessStatus(): Promise<ReadinessResponseDto> {
+    const dbHealth = await this.databaseHealthService.isDatabaseHealthy();
+    const poolStats = await this.databaseHealthService.getPoolStats();
+
     return {
-      status: 'ready',
+      status: dbHealth.isHealthy ? 'ready' : 'not_ready',
       timestamp: new Date().toISOString(),
       checks: {
-        database: 'ok', // Placeholder for actual database check
+        database: dbHealth.isHealthy ? 'ok' : 'failed',
+        databaseResponseTime: `${dbHealth.responseTime}ms`,
+        connectionPool: poolStats || 'unavailable',
         memory: this.getMemoryUsage(),
       },
     };
+  }
+
+  async getDatabaseHealth(): Promise<any> {
+    return this.databaseHealthService.getHealthReport();
   }
 
   private getMemoryUsage() {

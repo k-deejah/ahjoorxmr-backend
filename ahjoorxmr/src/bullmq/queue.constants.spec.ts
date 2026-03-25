@@ -1,4 +1,9 @@
-import { QUEUE_NAMES, JOB_NAMES, BACKOFF_DELAYS, RETRY_CONFIG } from '../../queue/queue.constants';
+import {
+  QUEUE_NAMES,
+  JOB_NAMES,
+  BACKOFF_DELAYS,
+  RETRY_CONFIG,
+} from '../../queue/queue.constants';
 import { emailBackoffStrategy } from '../../queue/processors/email.processor';
 import { eventSyncBackoffStrategy } from '../../queue/processors/event-sync.processor';
 import { groupSyncBackoffStrategy } from '../../queue/processors/group-sync.processor';

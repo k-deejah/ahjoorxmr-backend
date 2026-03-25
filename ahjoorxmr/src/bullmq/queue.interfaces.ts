@@ -15,6 +15,8 @@ export interface SendEmailJobData {
 export interface SendNotificationEmailJobData extends SendEmailJobData {
   userId: string;
   notificationType: string;
+  body: string;
+  actionLink?: string;
 }
 
 export interface SendWelcomeEmailJobData {

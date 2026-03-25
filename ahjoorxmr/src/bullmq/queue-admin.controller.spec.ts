@@ -5,9 +5,33 @@ import { QUEUE_NAMES } from '../../queue/queue.constants';
 
 const mockStats: AllQueueStats = {
   queues: [
-    { name: QUEUE_NAMES.EMAIL, waiting: 2, active: 1, completed: 50, failed: 0, delayed: 0, paused: 0 },
-    { name: QUEUE_NAMES.EVENT_SYNC, waiting: 0, active: 0, completed: 10, failed: 1, delayed: 0, paused: 0 },
-    { name: QUEUE_NAMES.GROUP_SYNC, waiting: 1, active: 0, completed: 5, failed: 0, delayed: 0, paused: 0 },
+    {
+      name: QUEUE_NAMES.EMAIL,
+      waiting: 2,
+      active: 1,
+      completed: 50,
+      failed: 0,
+      delayed: 0,
+      paused: 0,
+    },
+    {
+      name: QUEUE_NAMES.EVENT_SYNC,
+      waiting: 0,
+      active: 0,
+      completed: 10,
+      failed: 1,
+      delayed: 0,
+      paused: 0,
+    },
+    {
+      name: QUEUE_NAMES.GROUP_SYNC,
+      waiting: 1,
+      active: 0,
+      completed: 5,
+      failed: 0,
+      delayed: 0,
+      paused: 0,
+    },
   ],
   deadLetter: {
     name: QUEUE_NAMES.DEAD_LETTER,

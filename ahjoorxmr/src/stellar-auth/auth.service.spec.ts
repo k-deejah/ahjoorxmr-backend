@@ -11,7 +11,8 @@ import { UsersService } from '../users/users.service';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-const WALLET_ADDRESS = 'GBVZM3OSDLSNP5LJJQAYZMJQJIQXQP5PGLLQZXEYQZRTDMZQNM3NLFB';
+const WALLET_ADDRESS =
+  'GBVZM3OSDLSNP5LJJQAYZMJQJIQXQP5PGLLQZXEYQZRTDMZQNM3NLFB';
 
 function makeMockUser(overrides: Partial<any> = {}) {
   return {
@@ -162,7 +163,9 @@ describe('AuthService', () => {
 
       mockRedis.get.mockResolvedValue(testChallenge);
       mockRedis.del.mockResolvedValue(1);
-      mockUsersService.upsertByWalletAddress.mockResolvedValue(makeMockUser({ walletAddress }));
+      mockUsersService.upsertByWalletAddress.mockResolvedValue(
+        makeMockUser({ walletAddress }),
+      );
       mockJwtService.signAsync
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('refresh-token');
@@ -170,7 +173,9 @@ describe('AuthService', () => {
 
       await service.verifySignature(walletAddress, sig, testChallenge);
 
-      expect(mockRedis.del).toHaveBeenCalledWith(`siws:challenge:${walletAddress}`);
+      expect(mockRedis.del).toHaveBeenCalledWith(
+        `siws:challenge:${walletAddress}`,
+      );
     });
 
     it('should upsert user and return access + refresh tokens on success', async () => {
@@ -188,10 +193,19 @@ describe('AuthService', () => {
         .mockResolvedValueOnce('refresh-token');
       mockUsersService.updateRefreshTokenHash.mockResolvedValue(undefined);
 
-      const result = await service.verifySignature(walletAddress, sig, testChallenge);
+      const result = await service.verifySignature(
+        walletAddress,
+        sig,
+        testChallenge,
+      );
 
-      expect(mockUsersService.upsertByWalletAddress).toHaveBeenCalledWith(walletAddress);
-      expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'refresh-token' });
+      expect(mockUsersService.upsertByWalletAddress).toHaveBeenCalledWith(
+        walletAddress,
+      );
+      expect(result).toEqual({
+        accessToken: 'access-token',
+        refreshToken: 'refresh-token',
+      });
     });
 
     it('should store a SHA-256 hash of the refresh token (not plain text)', async () => {
@@ -202,7 +216,9 @@ describe('AuthService', () => {
 
       mockRedis.get.mockResolvedValue(testChallenge);
       mockRedis.del.mockResolvedValue(1);
-      mockUsersService.upsertByWalletAddress.mockResolvedValue(makeMockUser({ walletAddress }));
+      mockUsersService.upsertByWalletAddress.mockResolvedValue(
+        makeMockUser({ walletAddress }),
+      );
       mockJwtService.signAsync
         .mockResolvedValueOnce('access-token')
         .mockResolvedValueOnce('plain-refresh-token');
@@ -293,7 +309,10 @@ describe('AuthService', () => {
 
       await service.logout(WALLET_ADDRESS);
 
-      expect(mockUsersService.updateRefreshTokenHash).toHaveBeenCalledWith(user.id, null);
+      expect(mockUsersService.updateRefreshTokenHash).toHaveBeenCalledWith(
+        user.id,
+        null,
+      );
     });
 
     it('should do nothing gracefully when user is not found', async () => {

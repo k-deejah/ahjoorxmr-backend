@@ -40,9 +40,7 @@ export class BullBoardService {
       });
 
       const httpAdapter = app.getHttpAdapter();
-      httpAdapter
-        .getInstance()
-        .use('/admin/queues', serverAdapter.getRouter());
+      httpAdapter.getInstance().use('/admin/queues', serverAdapter.getRouter());
 
       this.logger.log(`BullBoard mounted at /admin/queues (env=${env})`);
     } catch (err) {

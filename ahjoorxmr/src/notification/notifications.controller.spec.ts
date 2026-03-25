@@ -31,7 +31,13 @@ describe('NotificationsController', () => {
 
   describe('findAll()', () => {
     it('delegates to service.findAll with userId and query', async () => {
-      const paginatedResult = { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+      const paginatedResult = {
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 20,
+        totalPages: 0,
+      };
       mockService.findAll.mockResolvedValue(paginatedResult);
 
       const query = { page: 1, limit: 20 };
@@ -42,9 +48,19 @@ describe('NotificationsController', () => {
     });
 
     it('passes type filter through to service', async () => {
-      mockService.findAll.mockResolvedValue({ data: [], total: 0, page: 1, limit: 10, totalPages: 0 });
+      mockService.findAll.mockResolvedValue({
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+        totalPages: 0,
+      });
 
-      const query = { page: 1, limit: 10, type: NotificationType.PAYOUT_RECEIVED };
+      const query = {
+        page: 1,
+        limit: 10,
+        type: NotificationType.PAYOUT_RECEIVED,
+      };
       await controller.findAll(userId, query);
 
       expect(mockService.findAll).toHaveBeenCalledWith(userId, query);

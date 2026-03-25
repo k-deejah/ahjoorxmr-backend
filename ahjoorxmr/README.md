@@ -103,6 +103,115 @@ $ npm run migration:revert
 - Never modify a migration that has been run in production
 - Use descriptive names for migrations (e.g., `AddUserEmailColumn`, `CreateOrdersTable`)
 
+## API Versioning
+
+This API uses **URI-based versioning** to manage breaking changes and ensure backward compatibility. All endpoints are versioned using the `/api/v{version}/` prefix.
+
+### Version Strategy
+
+- **Current Version**: `v1`
+- **Base URL Pattern**: `/api/v{version}/{resource}`
+- **Example**: `/api/v1/users`, `/api/v1/groups`, `/api/v1/auth`
+
+### Versioning Implementation
+
+The API uses NestJS's built-in versioning system with the following configuration:
+
+```typescript
+app.enableVersioning({
+  type: VersioningType.URI,
+  defaultVersion: '1',
+  prefix: 'api/v',
+});
+```
+
+### How It Works
+
+1. **All endpoints are versioned by default**: Controllers use the `@Version()` decorator
+2. **Multiple versions can coexist**: Different versions can run simultaneously
+3. **Deprecation warnings**: Deprecated versions return special headers
+4. **Version-specific documentation**: Swagger docs are separated by version
+
+### HTTP Headers
+
+#### Deprecation Headers
+
+When using a deprecated API version, the following headers are returned:
+
+```
+X-API-Deprecated: true
+X-API-Deprecation-Info: This API version is deprecated. Please migrate to the latest version.
+X-API-Sunset-Date: 2027-12-31
+```
+
+### Accessing Different Versions
+
+To access different API versions, simply change the version number in the URL:
+
+```bash
+# Version 1 (current)
+GET /api/v1/users
+
+# Future version 2
+GET /api/v2/users
+```
+
+### Creating New Versions
+
+When introducing breaking changes:
+
+1. **Create version-specific controllers** (if needed):
+
+   ```typescript
+   @Controller('users')
+   @Version('2')
+   export class UsersV2Controller { ... }
+   ```
+
+2. **Create version-specific DTOs** (if needed):
+
+   ```
+   dto/
+     v1/
+       user.dto.ts
+     v2/
+       user.dto.ts
+   ```
+
+3. **Update Swagger configuration** in `main.ts` to include the new version
+
+4. **Mark old versions as deprecated**:
+   ```typescript
+   @Controller('users')
+   @Version('1')
+   @SetMetadata('deprecated', true)
+   export class UsersController { ... }
+   ```
+
+### Best Practices
+
+- **Maintain backward compatibility** within a major version
+- **Document all breaking changes** in version release notes
+- **Plan deprecation timelines** before removing old versions
+- **Test all versions** independently in your test suite
+- **Use semantic versioning principles** for planning version increments
+
+### Special Endpoints
+
+Some endpoints are **not versioned** as they serve infrastructure purposes:
+
+- `/health` - Health check endpoint
+- `/api/docs` - Swagger documentation (defaults to latest version)
+- `/api/docs/v1` - Version-specific Swagger documentation
+
+### API Documentation
+
+Swagger documentation is available for each version:
+
+- **Main docs** (latest): `http://localhost:3000/api/docs`
+- **Version 1**: `http://localhost:3000/api/docs/v1`
+- **Version 2** (when available): `http://localhost:3000/api/docs/v2`
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

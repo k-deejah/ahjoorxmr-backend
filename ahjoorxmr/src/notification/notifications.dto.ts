@@ -1,6 +1,6 @@
 import { IsEnum, IsInt, IsOptional, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
-import { NotificationType } from '../enums/notification-type.enum';
+import { NotificationType } from './notification-type.enum';
 
 export class PaginateNotificationsDto {
   @IsOptional()

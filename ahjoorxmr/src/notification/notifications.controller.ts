@@ -8,13 +8,15 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  Version,
 } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { PaginateNotificationsDto } from './dto/notifications.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
-@Controller('api/v1/notifications')
+@Controller('notifications')
+@Version('1')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}

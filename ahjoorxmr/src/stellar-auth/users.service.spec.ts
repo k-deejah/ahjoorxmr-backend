@@ -44,7 +44,9 @@ describe('UsersService', () => {
 
       const user = await service.upsertByWalletAddress(WALLET);
 
-      expect(repo.findOne).toHaveBeenCalledWith({ where: { walletAddress: WALLET } });
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { walletAddress: WALLET },
+      });
       expect(repo.create).not.toHaveBeenCalled();
       expect(user).toBe(existing);
     });
@@ -90,7 +92,9 @@ describe('UsersService', () => {
 
       await service.updateRefreshTokenHash('user-id', 'sha256hash');
 
-      expect(repo.update).toHaveBeenCalledWith('user-id', { refreshTokenHash: 'sha256hash' });
+      expect(repo.update).toHaveBeenCalledWith('user-id', {
+        refreshTokenHash: 'sha256hash',
+      });
     });
 
     it('should accept null to clear the refresh token hash', async () => {
@@ -98,7 +102,9 @@ describe('UsersService', () => {
 
       await service.updateRefreshTokenHash('user-id', null);
 
-      expect(repo.update).toHaveBeenCalledWith('user-id', { refreshTokenHash: null });
+      expect(repo.update).toHaveBeenCalledWith('user-id', {
+        refreshTokenHash: null,
+      });
     });
   });
 });

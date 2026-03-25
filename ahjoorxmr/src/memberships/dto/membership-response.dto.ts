@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { MembershipStatus } from '../entities/membership-status.enum';
 
 /**
@@ -5,14 +6,66 @@ import { MembershipStatus } from '../entities/membership-status.enum';
  * Returns all membership fields with dates in ISO 8601 format.
  */
 export class MembershipResponseDto {
+  @ApiProperty({
+    description: 'Membership unique identifier',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
   id: string;
+
+  @ApiProperty({
+    description: 'Group unique identifier',
+    example: '123e4567-e89b-12d3-a456-426614174001',
+  })
   groupId: string;
+
+  @ApiProperty({
+    description: 'User unique identifier',
+    example: '123e4567-e89b-12d3-a456-426614174002',
+  })
   userId: string;
+
+  @ApiProperty({
+    description: 'Stellar wallet address of the member',
+    example: 'GBXGQJWVLWOYHFLVTKWV5FGHA3LNYY2JQKM7OAJAUEQFU6LPCSEFVXON',
+  })
   walletAddress: string;
+
+  @ApiProperty({
+    description: 'Order in which member receives payout (1-based)',
+    example: 1,
+    minimum: 1,
+  })
   payoutOrder: number;
+
+  @ApiProperty({
+    description: 'Whether the member has received their payout',
+    example: false,
+  })
   hasReceivedPayout: boolean;
+
+  @ApiProperty({
+    description: 'Whether the member has paid for the current round',
+    example: true,
+  })
   hasPaidCurrentRound: boolean;
+
+  @ApiProperty({
+    description: 'Membership status',
+    enum: MembershipStatus,
+    example: MembershipStatus.ACTIVE,
+  })
+  transactionHash?: string | null;
   status: MembershipStatus;
+
+  @ApiProperty({
+    description: 'Membership creation timestamp (ISO 8601)',
+    example: '2024-01-01T00:00:00.000Z',
+  })
   createdAt: string;
+
+  @ApiProperty({
+    description: 'Last update timestamp (ISO 8601)',
+    example: '2024-01-01T00:00:00.000Z',
+  })
   updatedAt: string;
 }

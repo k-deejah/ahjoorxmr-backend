@@ -7,9 +7,9 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MailerService } from '@nestjs-modules/mailer';
-import { Notification } from './entities/notification.entity';
-import { NotificationType } from './enums/notification-type.enum';
-import { PaginateNotificationsDto, NotifyDto } from './dto/notifications.dto';
+import { Notification } from './notification.entity';
+import { NotificationType } from './notification-type.enum';
+import { PaginateNotificationsDto, NotifyDto } from './notifications.dto';
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -51,12 +51,14 @@ export class NotificationsService {
     const saved = await this.notificationRepo.save(notification);
 
     if (dto.sendEmail && dto.emailTo) {
-      setImmediate(() => this.sendEmail(dto).catch((err) => {
-        this.logger.error(
-          `Failed to send email for notification ${saved.id}: ${err.message}`,
-          err.stack,
-        );
-      }));
+      setImmediate(() =>
+        this.sendEmail(dto).catch((err) => {
+          this.logger.error(
+            `Failed to send email for notification ${saved.id}: ${err.message}`,
+            err.stack,
+          );
+        }),
+      );
     }
 
     return saved;

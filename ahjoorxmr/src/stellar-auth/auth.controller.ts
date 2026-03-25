@@ -5,6 +5,7 @@ import {
   HttpStatus,
   Post,
   Request,
+  Version,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
@@ -15,7 +16,8 @@ import {
 } from './auth.dto';
 import { Public } from '../common/decorators/public.decorator';
 
-@Controller('api/v1/auth')
+@Controller('auth')
+@Version('1')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -25,7 +27,9 @@ export class AuthController {
   async challenge(
     @Body() dto: ChallengeRequestDto,
   ): Promise<ChallengeResponseDto> {
-    const challenge = await this.authService.generateChallenge(dto.walletAddress);
+    const challenge = await this.authService.generateChallenge(
+      dto.walletAddress,
+    );
     return { challenge };
   }
 

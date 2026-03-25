@@ -5,7 +5,7 @@ import {
   CreateDateColumn,
   Index,
 } from 'typeorm';
-import { NotificationType } from '../enums/notification-type.enum';
+import { NotificationType } from './notification-type.enum';
 
 @Entity('notifications')
 @Index(['userId', 'createdAt'])

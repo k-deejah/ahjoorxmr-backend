@@ -16,7 +16,9 @@ import { JwtAuthGuard } from '../../src/auth/guards/jwt-auth.guard';
 const AUTH_USER_ID = 'e2e-user-id';
 const OTHER_USER_ID = 'other-user-id';
 
-const makeNotification = (overrides: Partial<Notification> = {}): Notification => ({
+const makeNotification = (
+  overrides: Partial<Notification> = {},
+): Notification => ({
   id: 'notif-1',
   userId: AUTH_USER_ID,
   type: NotificationType.ROUND_OPENED,
@@ -61,7 +63,9 @@ describe('Notifications — E2E', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({ transform: true, whitelist: true }),
+    );
     await app.init();
   });
 
@@ -176,7 +180,9 @@ describe('Notifications — E2E', () => {
     });
 
     it('returns 403 when notification belongs to another user', async () => {
-      repoMock.findOne.mockResolvedValue(makeNotification({ userId: OTHER_USER_ID }));
+      repoMock.findOne.mockResolvedValue(
+        makeNotification({ userId: OTHER_USER_ID }),
+      );
 
       const { status } = await request(app.getHttpServer()).patch(
         '/api/v1/notifications/notif-1/read',

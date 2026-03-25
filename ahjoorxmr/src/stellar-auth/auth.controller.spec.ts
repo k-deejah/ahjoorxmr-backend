@@ -9,7 +9,8 @@ const mockAuthService = {
   logout: jest.fn(),
 };
 
-const WALLET_ADDRESS = 'GBVZM3OSDLSNP5LJJQAYZMJQJIQXQP5PGLLQZXEYQZRTDMZQNM3NLFB';
+const WALLET_ADDRESS =
+  'GBVZM3OSDLSNP5LJJQAYZMJQJIQXQP5PGLLQZXEYQZRTDMZQNM3NLFB';
 
 describe('AuthController', () => {
   let controller: AuthController;
@@ -29,9 +30,13 @@ describe('AuthController', () => {
     it('should return a challenge string', async () => {
       mockAuthService.generateChallenge.mockResolvedValue('challenge-string');
 
-      const result = await controller.challenge({ walletAddress: WALLET_ADDRESS });
+      const result = await controller.challenge({
+        walletAddress: WALLET_ADDRESS,
+      });
 
-      expect(mockAuthService.generateChallenge).toHaveBeenCalledWith(WALLET_ADDRESS);
+      expect(mockAuthService.generateChallenge).toHaveBeenCalledWith(
+        WALLET_ADDRESS,
+      );
       expect(result).toEqual({ challenge: 'challenge-string' });
     });
   });
@@ -58,7 +63,9 @@ describe('AuthController', () => {
 
   describe('POST /refresh', () => {
     it('should return a new access token', async () => {
-      mockAuthService.refreshAccessToken.mockResolvedValue({ accessToken: 'new-at' });
+      mockAuthService.refreshAccessToken.mockResolvedValue({
+        accessToken: 'new-at',
+      });
 
       const result = await controller.refresh({ refreshToken: 'rt' });
 

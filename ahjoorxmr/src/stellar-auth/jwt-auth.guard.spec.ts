@@ -53,7 +53,9 @@ describe('JwtAuthGuard', () => {
   });
 
   it('handleRequest should throw UnauthorizedException when user is null', () => {
-    expect(() => guard.handleRequest(null, null)).toThrow(UnauthorizedException);
+    expect(() => guard.handleRequest(null, null)).toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('handleRequest should re-throw existing error', () => {

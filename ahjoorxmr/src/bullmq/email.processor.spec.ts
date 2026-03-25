@@ -1,117 +1,169 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { EmailProcessor } from './email.processor';
+import { DeadLetterService } from './dead-letter.service';
+import { MailService } from '../mail/mail.service';
 import { Job } from 'bullmq';
-import { EmailProcessor } from '../../queue/processors/email.processor';
-import { DeadLetterService } from '../../queue/dead-letter.service';
-import { JOB_NAMES, QUEUE_NAMES } from '../../queue/queue.constants';
-
-const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job =>
-  ({
-    id: 'test-job-id',
-    name,
-    data,
-    attemptsMade: 0,
-    opts: { attempts: 3 },
-    ...overrides,
-  } as unknown as Job);
+import { QUEUE_NAMES, JOB_NAMES } from './queue.constants';
 
 describe('EmailProcessor', () => {
   let processor: EmailProcessor;
-  let deadLetterService: jest.Mocked<DeadLetterService>;
+  let mailService: MailService;
+  let deadLetterService: DeadLetterService;
+
+  const mockMailService = {
+    sendMail: jest.fn().mockResolvedValue(undefined),
+    sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
+    sendNotificationEmail: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const mockDeadLetterService = {
+    moveToDeadLetter: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         EmailProcessor,
         {
+          provide: MailService,
+          useValue: mockMailService,
+        },
+        {
           provide: DeadLetterService,
-          useValue: {
-            moveToDeadLetter: jest.fn().mockResolvedValue(undefined),
-          },
+          useValue: mockDeadLetterService,
         },
       ],
     }).compile();
 
-    processor = module.get(EmailProcessor);
-    deadLetterService = module.get(DeadLetterService);
+    processor = module.get<EmailProcessor>(EmailProcessor);
+    mailService = module.get<MailService>(MailService);
+    deadLetterService = module.get<DeadLetterService>(DeadLetterService);
   });
 
-  afterEach(() => jest.clearAllMocks());
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
 
-  // ---------------------------------------------------------------------------
-  // process()
-  // ---------------------------------------------------------------------------
-  describe('process()', () => {
-    it('should process SEND_EMAIL job', async () => {
-      const job = makeJob(JOB_NAMES.SEND_EMAIL, {
-        to: 'user@example.com',
-        subject: 'Hello',
-        html: '<p>Hi</p>',
+  it('should be defined', () => {
+    expect(processor).toBeDefined();
+  });
+
+  describe('process', () => {
+    it('should handle SEND_EMAIL job', async () => {
+      const job = {
+        id: '1',
+        name: JOB_NAMES.SEND_EMAIL,
+        data: {
+          to: 'test@example.com',
+          subject: 'Test',
+          html: '<p>Test</p>',
+        },
+      } as Job;
+
+      await processor.process(job);
+
+      expect(mailService.sendMail).toHaveBeenCalledWith({
+        to: 'test@example.com',
+        subject: 'Test',
+        html: '<p>Test</p>',
+        text: undefined,
+        template: undefined,
+        context: undefined,
       });
-      await expect(processor.process(job)).resolves.not.toThrow();
     });
 
-    it('should process SEND_NOTIFICATION_EMAIL job', async () => {
-      const job = makeJob(JOB_NAMES.SEND_NOTIFICATION_EMAIL, {
-        userId: 'u1',
-        notificationType: 'GROUP_INVITE',
-        to: 'user@example.com',
-        subject: 'You have an invitation',
-      });
-      await expect(processor.process(job)).resolves.not.toThrow();
+    it('should handle SEND_WELCOME_EMAIL job', async () => {
+      const job = {
+        id: '2',
+        name: JOB_NAMES.SEND_WELCOME_EMAIL,
+        data: {
+          userId: 'user-123',
+          email: 'test@example.com',
+          username: 'John Doe',
+        },
+      } as Job;
+
+      await processor.process(job);
+
+      expect(mailService.sendWelcomeEmail).toHaveBeenCalledWith(
+        'test@example.com',
+        'John Doe',
+      );
     });
 
-    it('should process SEND_WELCOME_EMAIL job', async () => {
-      const job = makeJob(JOB_NAMES.SEND_WELCOME_EMAIL, {
-        userId: 'u1',
-        email: 'newuser@example.com',
-        username: 'Alice',
-      });
-      await expect(processor.process(job)).resolves.not.toThrow();
+    it('should handle SEND_NOTIFICATION_EMAIL job', async () => {
+      const job = {
+        id: '3',
+        name: JOB_NAMES.SEND_NOTIFICATION_EMAIL,
+        data: {
+          userId: 'user-123',
+          notificationType: 'info',
+          to: 'test@example.com',
+          subject: 'Notification',
+          body: 'Test notification',
+          actionLink: 'http://example.com',
+        },
+      } as Job;
+
+      await processor.process(job);
+
+      expect(mailService.sendNotificationEmail).toHaveBeenCalledWith(
+        'test@example.com',
+        'user-123',
+        'Notification',
+        'Test notification',
+        'http://example.com',
+      );
     });
 
-    it('should throw for unknown job name', async () => {
-      const job = makeJob('unknown-job', {});
+    it('should throw error for unknown job type', async () => {
+      const job = {
+        id: '4',
+        name: 'UNKNOWN_JOB',
+        data: {},
+      } as Job;
+
       await expect(processor.process(job)).rejects.toThrow(
-        'Unknown email job type: unknown-job',
+        'Unknown email job type: UNKNOWN_JOB',
       );
     });
   });
 
-  // ---------------------------------------------------------------------------
-  // onFailed()
-  // ---------------------------------------------------------------------------
-  describe('onFailed()', () => {
-    it('should NOT call moveToDeadLetter when retries are not exhausted', async () => {
-      const job = makeJob(JOB_NAMES.SEND_EMAIL, {}, { attemptsMade: 1, opts: { attempts: 3 } } as any);
-      await processor.onFailed(job, new Error('SMTP timeout'));
-      expect(deadLetterService.moveToDeadLetter).not.toHaveBeenCalled();
-    });
-
-    it('should call moveToDeadLetter when all retries are exhausted', async () => {
-      const job = makeJob(JOB_NAMES.SEND_EMAIL, { to: 'a@b.com', subject: 'x' }, {
+  describe('onFailed', () => {
+    it('should move job to dead letter queue after max retries', async () => {
+      const job = {
+        id: '1',
+        name: JOB_NAMES.SEND_EMAIL,
+        data: {},
         attemptsMade: 3,
         opts: { attempts: 3 },
-      } as any);
-      await processor.onFailed(job, new Error('SMTP failed permanently'));
+      } as Job;
+
+      const error = new Error('Send failed');
+
+      await processor.onFailed(job, error);
+
       expect(deadLetterService.moveToDeadLetter).toHaveBeenCalledWith(
         job,
-        expect.any(Error),
+        error,
         QUEUE_NAMES.EMAIL,
       );
     });
-  });
 
-  // ---------------------------------------------------------------------------
-  // onCompleted() / onStalled()
-  // ---------------------------------------------------------------------------
-  describe('event handlers', () => {
-    it('onCompleted should not throw', () => {
-      const job = makeJob(JOB_NAMES.SEND_EMAIL, {});
-      expect(() => processor.onCompleted(job)).not.toThrow();
-    });
+    it('should not move job to dead letter queue if retries remain', async () => {
+      const job = {
+        id: '1',
+        name: JOB_NAMES.SEND_EMAIL,
+        data: {},
+        attemptsMade: 1,
+        opts: { attempts: 3 },
+      } as Job;
 
-    it('onStalled should not throw', () => {
-      expect(() => processor.onStalled('job-id-123')).not.toThrow();
+      const error = new Error('Send failed');
+
+      await processor.onFailed(job, error);
+
+      expect(deadLetterService.moveToDeadLetter).not.toHaveBeenCalled();
     });
   });
 });

@@ -78,7 +78,13 @@ describe('NotificationsService', () => {
 
       let emailSent = false;
       mockMailer.sendMail.mockImplementation(
-        () => new Promise((r) => setTimeout(() => { emailSent = true; r({}); }, 200)),
+        () =>
+          new Promise((r) =>
+            setTimeout(() => {
+              emailSent = true;
+              r({});
+            }, 200),
+          ),
       );
 
       const emailDto: NotifyDto = {
@@ -229,7 +235,10 @@ describe('NotificationsService', () => {
 
       expect(mockRepo.findAndCount).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { userId: 'user-1', type: NotificationType.CONTRIBUTION_REMINDER },
+          where: {
+            userId: 'user-1',
+            type: NotificationType.CONTRIBUTION_REMINDER,
+          },
         }),
       );
     });
@@ -262,19 +271,28 @@ describe('NotificationsService', () => {
 
       const result = await service.markAsRead('uuid-1', 'user-1');
       expect(result.isRead).toBe(true);
-      expect(mockRepo.save).toHaveBeenCalledWith(expect.objectContaining({ isRead: true }));
+      expect(mockRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isRead: true }),
+      );
     });
 
     it('throws NotFoundException when notification not found', async () => {
       mockRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.markAsRead('missing', 'user-1')).rejects.toThrow(NotFoundException);
+      await expect(service.markAsRead('missing', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws ForbiddenException when userId does not match', async () => {
-      mockRepo.findOne.mockResolvedValue({ ...mockNotification(), userId: 'user-2' });
+      mockRepo.findOne.mockResolvedValue({
+        ...mockNotification(),
+        userId: 'user-2',
+      });
 
-      await expect(service.markAsRead('uuid-1', 'user-1')).rejects.toThrow(ForbiddenException);
+      await expect(service.markAsRead('uuid-1', 'user-1')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 

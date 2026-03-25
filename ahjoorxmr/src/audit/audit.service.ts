@@ -1,51 +1,79 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between, LessThan } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
-import { AuditLogResponseDto, GetAuditLogsQueryDto } from './dto/audit-log.dto';
+import { AuditLogQueryDto } from './dto/audit-log-query.dto';
+import {
+  PaginatedAuditLogResponseDto,
+  AuditLogResponseDto,
+} from './dto/audit-log-response.dto';
 
 @Injectable()
 export class AuditService {
+  private readonly logger = new Logger(AuditService.name);
+
   constructor(
     @InjectRepository(AuditLog)
     private readonly auditLogRepository: Repository<AuditLog>,
   ) {}
 
-  async getAuditLogs(query: GetAuditLogsQueryDto): Promise<AuditLogResponseDto> {
-    const page = query.page || 1;
-    const limit = query.limit || 50;
+  async createLog(data: Partial<AuditLog>): Promise<AuditLog> {
+    try {
+      const log = this.auditLogRepository.create(data);
+      return await this.auditLogRepository.save(log);
+    } catch (error) {
+      this.logger.error('Failed to create audit log', error);
+      throw error;
+    }
+  }
+
+  async findAll(
+    query: AuditLogQueryDto,
+  ): Promise<PaginatedAuditLogResponseDto> {
+    const {
+      userId,
+      action,
+      resource,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 20,
+    } = query;
+
+    const whereConditions: any = {};
+
+    if (userId) {
+      whereConditions.userId = userId;
+    }
+
+    if (action) {
+      whereConditions.action = action;
+    }
+
+    if (resource) {
+      whereConditions.resource = resource;
+    }
+
+    if (startDate && endDate) {
+      whereConditions.timestamp = Between(
+        new Date(startDate),
+        new Date(endDate),
+      );
+    } else if (startDate) {
+      whereConditions.timestamp = Between(new Date(startDate), new Date());
+    }
+
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.auditLogRepository.createQueryBuilder('audit');
-
-    if (query.action) {
-      queryBuilder.andWhere('audit.action = :action', { action: query.action });
-    }
-
-    if (query.entityType) {
-      queryBuilder.andWhere('audit.entityType = :entityType', { entityType: query.entityType });
-    }
-
-    if (query.userId) {
-      queryBuilder.andWhere('audit.userId = :userId', { userId: query.userId });
-    }
-
-    const [logs, total] = await queryBuilder
-      .orderBy('audit.createdAt', 'DESC')
-      .skip(skip)
-      .take(limit)
-      .getManyAndCount();
+    const [logs, total] = await this.auditLogRepository.findAndCount({
+      where: whereConditions,
+      order: { timestamp: 'DESC' },
+      skip,
+      take: limit,
+    });
 
     return {
-      data: logs.map(log => ({
-        id: log.id,
-        action: log.action,
-        entityType: log.entityType,
-        entityId: log.entityId,
-        userId: log.userId,
-        metadata: log.metadata,
-        createdAt: log.createdAt.toISOString(),
-      })),
+      data: logs.map((log) => AuditLogResponseDto.fromEntity(log)),
       total,
       page,
       limit,
@@ -53,21 +81,24 @@ export class AuditService {
     };
   }
 
-  async createLog(
-    action: string,
-    entityType: string,
-    entityId: string,
-    userId: string,
-    metadata?: Record<string, any>,
-  ): Promise<AuditLog> {
-    const log = this.auditLogRepository.create({
-      action,
-      entityType,
-      entityId,
-      userId,
-      metadata,
-    });
+  async archiveOldLogs(daysOld: number = 365): Promise<number> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - daysOld);
 
-    return this.auditLogRepository.save(log);
+    try {
+      const result = await this.auditLogRepository.delete({
+        timestamp: LessThan(cutoffDate),
+      });
+
+      const count = result.affected || 0;
+      this.logger.log(
+        `Archived ${count} audit logs older than ${daysOld} days`,
+      );
+
+      return count;
+    } catch (error) {
+      this.logger.error('Failed to archive old logs', error);
+      throw error;
+    }
   }
 }

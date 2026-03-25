@@ -26,9 +26,13 @@ export class EventSyncProcessor extends WorkerHost {
       case JOB_NAMES.SYNC_ON_CHAIN_EVENT:
         return this.handleSyncOnChainEvent(job as Job<SyncOnChainEventJobData>);
       case JOB_NAMES.PROCESS_TRANSFER_EVENT:
-        return this.handleTransferEvent(job as Job<ProcessTransferEventJobData>);
+        return this.handleTransferEvent(
+          job as Job<ProcessTransferEventJobData>,
+        );
       case JOB_NAMES.PROCESS_APPROVAL_EVENT:
-        return this.handleApprovalEvent(job as Job<ProcessApprovalEventJobData>);
+        return this.handleApprovalEvent(
+          job as Job<ProcessApprovalEventJobData>,
+        );
       default:
         throw new Error(`Unknown event-sync job type: ${job.name}`);
     }
@@ -37,8 +41,13 @@ export class EventSyncProcessor extends WorkerHost {
   private async handleSyncOnChainEvent(
     job: Job<SyncOnChainEventJobData>,
   ): Promise<void> {
-    const { eventName, transactionHash, blockNumber, contractAddress, chainId } =
-      job.data;
+    const {
+      eventName,
+      transactionHash,
+      blockNumber,
+      contractAddress,
+      chainId,
+    } = job.data;
     this.logger.log(
       `Syncing on-chain event eventName=${eventName} tx=${transactionHash} block=${blockNumber} chain=${chainId}`,
     );
@@ -85,7 +94,11 @@ export class EventSyncProcessor extends WorkerHost {
       this.logger.error(
         `Event-sync job [${job.name}] id=${job.id} exhausted all retries → moving to dead-letter queue`,
       );
-      await this.deadLetterService.moveToDeadLetter(job, error, QUEUE_NAMES.EVENT_SYNC);
+      await this.deadLetterService.moveToDeadLetter(
+        job,
+        error,
+        QUEUE_NAMES.EVENT_SYNC,
+      );
     }
   }
 
@@ -96,5 +109,7 @@ export class EventSyncProcessor extends WorkerHost {
 }
 
 export function eventSyncBackoffStrategy(attemptsMade: number): number {
-  return BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1];
+  return (
+    BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
+  );
 }

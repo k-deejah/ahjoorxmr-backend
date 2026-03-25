@@ -4,7 +4,11 @@ import { EventSyncProcessor } from '../../queue/processors/event-sync.processor'
 import { DeadLetterService } from '../../queue/dead-letter.service';
 import { JOB_NAMES, QUEUE_NAMES } from '../../queue/queue.constants';
 
-const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job =>
+const makeJob = (
+  name: string,
+  data: unknown,
+  overrides: Partial<Job> = {},
+): Job =>
   ({
     id: 'evt-job-id',
     name,
@@ -12,7 +16,7 @@ const makeJob = (name: string, data: unknown, overrides: Partial<Job> = {}): Job
     attemptsMade: 0,
     opts: { attempts: 3 },
     ...overrides,
-  } as unknown as Job);
+  }) as unknown as Job;
 
 const onChainEventData = {
   eventName: 'Transfer',

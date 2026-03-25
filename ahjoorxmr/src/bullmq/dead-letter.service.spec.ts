@@ -11,7 +11,7 @@ const makeJob = (overrides: Partial<Job> = {}): Job =>
     data: { to: 'test@example.com', subject: 'Test' },
     attemptsMade: 3,
     ...overrides,
-  } as unknown as Job);
+  }) as unknown as Job;
 
 describe('DeadLetterService', () => {
   let service: DeadLetterService;
@@ -46,7 +46,8 @@ describe('DeadLetterService', () => {
     it('should add a dead-letter job with correct shape', async () => {
       const job = makeJob();
       const error = new Error('SMTP connection refused');
-      error.stack = 'Error: SMTP connection refused\n  at sendEmail (mail.ts:42)';
+      error.stack =
+        'Error: SMTP connection refused\n  at sendEmail (mail.ts:42)';
 
       await service.moveToDeadLetter(job, error, QUEUE_NAMES.EMAIL);
 
@@ -89,7 +90,9 @@ describe('DeadLetterService', () => {
     });
 
     it('should propagate queue.add rejection', async () => {
-      deadLetterQueue.add.mockRejectedValueOnce(new Error('Redis connection lost'));
+      deadLetterQueue.add.mockRejectedValueOnce(
+        new Error('Redis connection lost'),
+      );
 
       const job = makeJob();
       await expect(
