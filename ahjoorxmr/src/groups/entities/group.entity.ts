@@ -43,6 +43,9 @@ export class Group extends BaseEntity {
   @Column('int')
   minMembers: number;
 
+  @Column('int')
+  maxMembers: number;
+
   @Column({ type: 'timestamp', nullable: true, default: null })
   staleAt: Date | null;
 

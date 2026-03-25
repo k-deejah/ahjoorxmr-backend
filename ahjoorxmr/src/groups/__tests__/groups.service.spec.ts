@@ -40,6 +40,7 @@ const createMockGroup = (overrides: Partial<Group> = {}): Group => ({
   currentRound: 0,
   totalRounds: 10,
   minMembers: 3,
+  maxMembers: 10,
   staleAt: null,
   memberships: [],
   createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -182,6 +183,7 @@ describe('GroupsService', () => {
       token: 'USDC:GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5',
       roundDuration: 2592000,
       totalRounds: 12,
+      minMembers: 3,
     };
 
     it('should create and return a PENDING group', async () => {
@@ -189,6 +191,7 @@ describe('GroupsService', () => {
         name: dto.name,
         contributionAmount: dto.contributionAmount,
         totalRounds: dto.totalRounds,
+        maxMembers: dto.totalRounds,
       });
 
       groupRepository.create!.mockReturnValue(mockGroup);
@@ -202,6 +205,7 @@ describe('GroupsService', () => {
           currentRound: 0,
           adminWallet: ADMIN_WALLET,
           contractAddress: null,
+          maxMembers: dto.totalRounds,
         }),
       );
       expect(groupRepository.save).toHaveBeenCalledWith(mockGroup);
@@ -243,6 +247,40 @@ describe('GroupsService', () => {
       await service.createGroup(dto, ADMIN_WALLET);
 
       expect(logger.log).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw BadRequestException when maxMembers != totalRounds', async () => {
+      const invalidDto = { ...dto, totalRounds: 12, maxMembers: 10 };
+
+      await expect(service.createGroup(invalidDto, ADMIN_WALLET)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.createGroup(invalidDto, ADMIN_WALLET)).rejects.toThrow(
+        'maxMembers must equal totalRounds',
+      );
+    });
+
+    it('should throw BadRequestException when minMembers > maxMembers', async () => {
+      const invalidDto = { ...dto, totalRounds: 5, minMembers: 8 };
+
+      await expect(service.createGroup(invalidDto, ADMIN_WALLET)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.createGroup(invalidDto, ADMIN_WALLET)).rejects.toThrow(
+        'minMembers must be less than or equal to maxMembers',
+      );
+    });
+
+    it('should default maxMembers to totalRounds when not provided', async () => {
+      const mockGroup = createMockGroup({ totalRounds: 12, maxMembers: 12 });
+      groupRepository.create!.mockReturnValue(mockGroup);
+      groupRepository.save!.mockResolvedValue(mockGroup);
+
+      await service.createGroup(dto, ADMIN_WALLET);
+
+      expect(groupRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ maxMembers: dto.totalRounds }),
+      );
     });
 
     it('should propagate unexpected errors', async () => {

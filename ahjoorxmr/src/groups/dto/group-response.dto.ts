@@ -72,6 +72,12 @@ export class GroupResponseDto {
   totalRounds: number;
 
   @ApiProperty({
+    description: 'Maximum number of members allowed in the group',
+    example: 12,
+  })
+  maxMembers: number;
+
+  @ApiProperty({
     description: 'Group creation timestamp (ISO 8601)',
     example: '2024-01-01T00:00:00.000Z',
   })

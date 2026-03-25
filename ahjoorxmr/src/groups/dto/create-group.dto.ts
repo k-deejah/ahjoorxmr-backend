@@ -71,6 +71,26 @@ export class CreateGroupDto {
   @Min(1)
   totalRounds: number;
 
+  @ApiProperty({
+    description: 'Minimum number of members required to activate the group',
+    example: 3,
+    minimum: 1,
+  })
+  @IsInt()
+  @Min(1)
+  minMembers: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Maximum number of members allowed (must equal totalRounds; defaults to totalRounds)',
+    example: 12,
+    minimum: 1,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxMembers?: number;
+
   @ApiPropertyOptional({
     description:
       'On-chain contract address (optional at creation time, assigned after deployment)',

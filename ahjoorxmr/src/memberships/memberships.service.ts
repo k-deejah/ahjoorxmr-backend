@@ -39,7 +39,7 @@ export class MembershipsService {
    * @throws BadRequestException if the group is already active
    * @private
    */
-  private async validateGroupNotActive(groupId: string): Promise<void> {
+  private async validateGroupNotActive(groupId: string): Promise<Group> {
     const group = await this.groupRepository.findOne({
       where: { id: groupId },
     });
@@ -58,6 +58,8 @@ export class MembershipsService {
         'Cannot modify memberships for an active group',
       );
     }
+
+    return group;
   }
 
   /**
@@ -103,7 +105,22 @@ export class MembershipsService {
 
     try {
       // Validate group exists and is not active
-      await this.validateGroupNotActive(groupId);
+      const group = await this.validateGroupNotActive(groupId);
+
+      // Enforce maxMembers cap
+      const memberCount = await this.membershipRepository.count({
+        where: { groupId },
+      });
+
+      if (memberCount >= group.maxMembers) {
+        this.logger.warn(
+          `Group ${groupId} is at capacity (${memberCount}/${group.maxMembers})`,
+          'MembershipsService',
+        );
+        throw new BadRequestException(
+          `Group has reached its maximum member capacity of ${group.maxMembers}`,
+        );
+      }
 
       // Check for duplicate membership
       const existingMembership = await this.membershipRepository.findOne({

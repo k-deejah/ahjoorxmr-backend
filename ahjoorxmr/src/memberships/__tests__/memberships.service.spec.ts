@@ -48,6 +48,8 @@ const createMockGroup = (overrides?: Partial<Group>): Group => {
     name: 'Test Group',
     contributionAmount: '100',
     status: GroupStatus.PENDING,
+    totalRounds: 5,
+    maxMembers: 5,
   };
 
   return { ...defaultGroup, ...overrides } as Group;
@@ -68,6 +70,7 @@ const createMockRepository = <T = any>(): MockRepository<T> => ({
   create: jest.fn(),
   save: jest.fn(),
   remove: jest.fn(),
+  count: jest.fn(),
   createQueryBuilder: jest.fn(),
 });
 
@@ -270,8 +273,75 @@ describe('MembershipsService', () => {
 
   // Placeholder for addMember tests
   describe('addMember', () => {
+    const groupId = '123e4567-e89b-12d3-a456-426614174001';
+    const dto = {
+      userId: '123e4567-e89b-12d3-a456-426614174002',
+      walletAddress: '0xabc',
+    };
+
     it('should be defined', () => {
       expect(service.addMember).toBeDefined();
+    });
+
+    it('should throw BadRequestException when group is at maxMembers cap', async () => {
+      const group = createMockGroup({ maxMembers: 3 });
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.count!.mockResolvedValue(3);
+
+      await expect(service.addMember(groupId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.addMember(groupId, dto)).rejects.toThrow(
+        'maximum member capacity of 3',
+      );
+    });
+
+    it('should throw BadRequestException when group exceeds maxMembers cap', async () => {
+      const group = createMockGroup({ maxMembers: 3 });
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.count!.mockResolvedValue(4);
+
+      await expect(service.addMember(groupId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should add member successfully when below maxMembers cap', async () => {
+      const group = createMockGroup({ maxMembers: 3 });
+      const membership = createMockMembership();
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.count!.mockResolvedValue(2);
+      membershipRepository.findOne!.mockResolvedValue(null);
+      membershipRepository.createQueryBuilder!.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ maxOrder: null }),
+      });
+      membershipRepository.create!.mockReturnValue(membership);
+      membershipRepository.save!.mockResolvedValue(membership);
+
+      const result = await service.addMember(groupId, dto);
+
+      expect(result).toEqual(membership);
+    });
+
+    it('should add member successfully when exactly one below cap (boundary)', async () => {
+      const group = createMockGroup({ maxMembers: 5 });
+      const membership = createMockMembership();
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.count!.mockResolvedValue(4);
+      membershipRepository.findOne!.mockResolvedValue(null);
+      membershipRepository.createQueryBuilder!.mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        getRawOne: jest.fn().mockResolvedValue({ maxOrder: 3 }),
+      });
+      membershipRepository.create!.mockReturnValue(membership);
+      membershipRepository.save!.mockResolvedValue(membership);
+
+      const result = await service.addMember(groupId, dto);
+
+      expect(result).toEqual(membership);
     });
   });
 

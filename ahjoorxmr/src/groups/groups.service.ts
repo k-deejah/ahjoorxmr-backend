@@ -51,8 +51,23 @@ export class GroupsService {
     );
 
     try {
+      const maxMembers = createGroupDto.maxMembers ?? createGroupDto.totalRounds;
+
+      if (maxMembers !== createGroupDto.totalRounds) {
+        throw new BadRequestException(
+          'maxMembers must equal totalRounds',
+        );
+      }
+
+      if (createGroupDto.minMembers > maxMembers) {
+        throw new BadRequestException(
+          'minMembers must be less than or equal to maxMembers',
+        );
+      }
+
       const group = this.groupRepository.create({
         ...createGroupDto,
+        maxMembers,
         adminWallet,
         status: GroupStatus.PENDING,
         currentRound: 0,
