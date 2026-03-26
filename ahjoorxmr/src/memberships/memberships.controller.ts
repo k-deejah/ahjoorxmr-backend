@@ -230,6 +230,55 @@ export class MembershipsController {
   }
 
   /**
+   * Returns the membership scheduled to receive the payout for the current round.
+   *
+   * @param groupId - The UUID of the group
+   * @returns The membership for the current round's recipient
+   * @throws NotFoundException if group doesn't exist or no member is scheduled
+   * @throws BadRequestException if group is not ACTIVE
+   */
+  @Get(':id/current-recipient')
+  @ApiOperation({
+    summary: 'Get current round payout recipient',
+    description: 'Returns the membership scheduled to receive the payout for the current round',
+  })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Successfully retrieved current recipient',
+    type: MembershipResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Group is not ACTIVE',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group not found or no member scheduled for current round',
+    type: ErrorResponseDto,
+  })
+  async getCurrentRecipient(
+    @Param('id', ParseUUIDPipe) groupId: string,
+  ): Promise<MembershipResponseDto> {
+    const membership = await this.membershipsService.getCurrentRecipient(groupId);
+
+    return {
+      id: membership.id,
+      groupId: membership.groupId,
+      userId: membership.userId,
+      walletAddress: membership.walletAddress,
+      payoutOrder: membership.payoutOrder,
+      hasReceivedPayout: membership.hasReceivedPayout,
+      hasPaidCurrentRound: membership.hasPaidCurrentRound,
+      transactionHash: membership.transactionHash,
+      status: membership.status,
+      createdAt: membership.createdAt.toISOString(),
+      updatedAt: membership.updatedAt.toISOString(),
+    };
+  }
+
+  /**
    * Records a payout to a member.
    * Admin-only endpoint that marks a member as having received their payout.
    *

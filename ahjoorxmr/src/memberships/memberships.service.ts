@@ -428,8 +428,46 @@ export class MembershipsService {
   }
 
   /**
+   * Returns the membership scheduled to receive the payout for the current round.
+   * Uses 0-indexed payoutOrder matching group.currentRound - 1.
+   *
+   * @param groupId - The UUID of the group
+   * @returns The Membership entity for the current round's recipient
+   * @throws NotFoundException if group doesn't exist or no member is scheduled
+   * @throws BadRequestException if group is not ACTIVE
+   */
+  async getCurrentRecipient(groupId: string): Promise<Membership> {
+    const group = await this.groupRepository.findOne({
+      where: { id: groupId },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Group not found');
+    }
+
+    if (group.status !== GroupStatus.ACTIVE) {
+      throw new BadRequestException('Group must be ACTIVE to query current recipient');
+    }
+
+    const expectedPayoutOrder = group.currentRound - 1;
+
+    const membership = await this.membershipRepository.findOne({
+      where: { groupId, payoutOrder: expectedPayoutOrder },
+    });
+
+    if (!membership) {
+      throw new NotFoundException(
+        `No member scheduled for payout in round ${group.currentRound}`,
+      );
+    }
+
+    return membership;
+  }
+
+  /**
    * Records a payout to a member.
-   * Validates group is ACTIVE, member exists and hasn't received payout yet.
+   * Validates group is ACTIVE, enforces sequential round-based payout order,
+   * member exists and hasn't received payout yet.
    * Marks member as paid and stores transaction hash.
    *
    * @param groupId - The UUID of the group
@@ -437,7 +475,7 @@ export class MembershipsService {
    * @param transactionHash - The blockchain transaction hash
    * @returns The updated Membership entity
    * @throws NotFoundException if group or membership doesn't exist
-   * @throws BadRequestException if group is not ACTIVE
+   * @throws BadRequestException if group is not ACTIVE or payout order is wrong
    * @throws ConflictException if member already received payout
    */
   async recordPayout(
@@ -472,6 +510,14 @@ export class MembershipsService {
 
     if (membership.hasReceivedPayout) {
       throw new ConflictException('Member has already received payout');
+    }
+
+    // Enforce sequential round-based payout: payoutOrder must match currentRound - 1 (0-indexed)
+    const expectedPayoutOrder = group.currentRound - 1;
+    if (membership.payoutOrder !== expectedPayoutOrder) {
+      throw new BadRequestException(
+        `Payout order mismatch: member has payoutOrder ${membership.payoutOrder} but current round ${group.currentRound} expects payoutOrder ${expectedPayoutOrder}`,
+      );
     }
 
     membership.hasReceivedPayout = true;

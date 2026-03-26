@@ -50,6 +50,7 @@ const createMockGroup = (overrides?: Partial<Group>): Group => {
     status: GroupStatus.PENDING,
     totalRounds: 5,
     maxMembers: 5,
+    currentRound: 1,
   };
 
   return { ...defaultGroup, ...overrides } as Group;
@@ -202,9 +203,10 @@ describe('MembershipsService', () => {
     const userId = '123e4567-e89b-12d3-a456-426614174002';
     const txHash = '0xabcdef1234567890';
 
-    it('should record payout successfully', async () => {
-      const group = createMockGroup({ status: GroupStatus.ACTIVE });
-      const membership = createMockMembership({ hasReceivedPayout: false });
+    it('should record payout successfully when payoutOrder matches currentRound - 1', async () => {
+      // currentRound=1, so expectedPayoutOrder=0; membership.payoutOrder=0 → correct
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 1 });
+      const membership = createMockMembership({ hasReceivedPayout: false, payoutOrder: 0 });
       const updatedMembership = {
         ...membership,
         hasReceivedPayout: true,
@@ -228,6 +230,38 @@ describe('MembershipsService', () => {
       );
     });
 
+    it('should throw BadRequestException when payoutOrder is ahead of current round (out-of-order)', async () => {
+      // currentRound=1, expectedPayoutOrder=0; membership.payoutOrder=2 → out-of-order
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 1 });
+      const membership = createMockMembership({ hasReceivedPayout: false, payoutOrder: 2 });
+
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(membership);
+
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow('Payout order mismatch');
+    });
+
+    it('should throw BadRequestException when a round is skipped (member payoutOrder behind current round)', async () => {
+      // currentRound=3, expectedPayoutOrder=2; membership.payoutOrder=0 → skipped rounds
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 3 });
+      const membership = createMockMembership({ hasReceivedPayout: false, payoutOrder: 0 });
+
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(membership);
+
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.recordPayout(groupId, userId, txHash),
+      ).rejects.toThrow('Payout order mismatch');
+    });
+
     it('should throw NotFoundException when group does not exist', async () => {
       groupRepository.findOne!.mockResolvedValue(null);
 
@@ -246,7 +280,7 @@ describe('MembershipsService', () => {
     });
 
     it('should throw NotFoundException when membership does not exist', async () => {
-      const group = createMockGroup({ status: GroupStatus.ACTIVE });
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 1 });
       groupRepository.findOne!.mockResolvedValue(group);
       membershipRepository.findOne!.mockResolvedValue(null);
 
@@ -256,8 +290,8 @@ describe('MembershipsService', () => {
     });
 
     it('should throw ConflictException when member already received payout', async () => {
-      const group = createMockGroup({ status: GroupStatus.ACTIVE });
-      const membership = createMockMembership({ hasReceivedPayout: true });
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 1 });
+      const membership = createMockMembership({ hasReceivedPayout: true, payoutOrder: 0 });
 
       groupRepository.findOne!.mockResolvedValue(group);
       membershipRepository.findOne!.mockResolvedValue(membership);
@@ -268,6 +302,50 @@ describe('MembershipsService', () => {
       await expect(
         service.recordPayout(groupId, userId, txHash),
       ).rejects.toThrow('Member has already received payout');
+    });
+  });
+
+  describe('getCurrentRecipient', () => {
+    const groupId = '123e4567-e89b-12d3-a456-426614174001';
+
+    it('should return the membership scheduled for the current round', async () => {
+      // currentRound=2, so expectedPayoutOrder=1
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 2 });
+      const membership = createMockMembership({ payoutOrder: 1 });
+
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(membership);
+
+      const result = await service.getCurrentRecipient(groupId);
+
+      expect(result.payoutOrder).toBe(1);
+      expect(membershipRepository.findOne).toHaveBeenCalledWith({
+        where: { groupId, payoutOrder: 1 },
+      });
+    });
+
+    it('should throw NotFoundException when group does not exist', async () => {
+      groupRepository.findOne!.mockResolvedValue(null);
+
+      await expect(service.getCurrentRecipient(groupId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw BadRequestException when group is not ACTIVE', async () => {
+      const group = createMockGroup({ status: GroupStatus.PENDING });
+      groupRepository.findOne!.mockResolvedValue(group);
+
+      await expect(service.getCurrentRecipient(groupId)).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException when no member is scheduled for the current round', async () => {
+      const group = createMockGroup({ status: GroupStatus.ACTIVE, currentRound: 1 });
+      groupRepository.findOne!.mockResolvedValue(group);
+      membershipRepository.findOne!.mockResolvedValue(null);
+
+      await expect(service.getCurrentRecipient(groupId)).rejects.toThrow(NotFoundException);
+      await expect(service.getCurrentRecipient(groupId)).rejects.toThrow(
+        'No member scheduled for payout in round 1',
+      );
     });
   });
 
