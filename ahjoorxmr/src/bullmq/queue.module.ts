@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { QUEUE_NAMES, BACKOFF_DELAYS, RETRY_CONFIG } from './queue.constants';
 import { QueueService } from './queue.service';
@@ -11,6 +12,11 @@ import { EmailProcessor } from './email.processor';
 import { EventSyncProcessor } from './event-sync.processor';
 import { GroupSyncProcessor } from './group-sync.processor';
 import { MailModule } from '../mail/mail.module';
+import { StellarModule } from '../stellar/stellar.module';
+import { NotificationsModule } from '../notification/notifications.module';
+import { Group } from '../groups/entities/group.entity';
+import { Contribution } from '../contributions/entities/contribution.entity';
+import { Membership } from '../memberships/entities/membership.entity';
 
 /**
  * Custom backoff strategy registered globally via BullMQ worker options.
@@ -36,6 +42,9 @@ const sharedQueueOptions = {
   imports: [
     ConfigModule,
     MailModule,
+    StellarModule,
+    NotificationsModule,
+    TypeOrmModule.forFeature([Group, Contribution, Membership]),
 
     // Register BullMQ with the shared ioredis client from RedisModule
     BullModule.forRootAsync({

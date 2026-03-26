@@ -1,20 +1,28 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
-import { QUEUE_NAMES, JOB_NAMES, BACKOFF_DELAYS } from '../queue.constants';
-import {
-  SyncGroupStateJobData,
-  SyncAllGroupsJobData,
-} from '../queue.interfaces';
-import { DeadLetterService } from '../dead-letter.service';
+import { InjectQueue } from '@nestjs/bullmq';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { Job, Queue } from 'bullmq';
+import { QUEUE_NAMES, JOB_NAMES, BACKOFF_DELAYS, RETRY_CONFIG } from './queue.constants';
+import { SyncGroupStateJobData, SyncAllGroupsJobData } from './queue.interfaces';
+import { DeadLetterService } from './dead-letter.service';
+import { StellarService } from '../stellar/stellar.service';
+import { Group } from '../groups/entities/group.entity';
+import { GroupStatus } from '../groups/entities/group-status.enum';
 
-@Processor(QUEUE_NAMES.GROUP_SYNC, {
-  concurrency: 2,
-})
+@Processor(QUEUE_NAMES.GROUP_SYNC, { concurrency: 2 })
 export class GroupSyncProcessor extends WorkerHost {
   private readonly logger = new Logger(GroupSyncProcessor.name);
 
-  constructor(private readonly deadLetterService: DeadLetterService) {
+  constructor(
+    private readonly deadLetterService: DeadLetterService,
+    private readonly stellarService: StellarService,
+    @InjectRepository(Group)
+    private readonly groupRepository: Repository<Group>,
+    @InjectQueue(QUEUE_NAMES.GROUP_SYNC)
+    private readonly groupSyncQueue: Queue,
+  ) {
     super();
   }
 
@@ -31,28 +39,86 @@ export class GroupSyncProcessor extends WorkerHost {
     }
   }
 
-  private async handleSyncGroupState(
-    job: Job<SyncGroupStateJobData>,
-  ): Promise<void> {
-    const { groupId, contractAddress, chainId, forceSync } = job.data;
-    this.logger.log(
-      `Syncing group state groupId=${groupId} contract=${contractAddress} chain=${chainId} force=${forceSync ?? false}`,
-    );
-    // TODO: await this.groupContractService.syncGroup(groupId, contractAddress, chainId);
-    this.logger.log(`Group state synced groupId=${groupId}`);
+  private async handleSyncGroupState(job: Job<SyncGroupStateJobData>): Promise<void> {
+    const { groupId, contractAddress, forceSync } = job.data;
+    this.logger.log(`Syncing group state groupId=${groupId} contract=${contractAddress} force=${forceSync ?? false}`);
+
+    const group = await this.groupRepository.findOne({ where: { id: groupId } });
+    if (!group) {
+      this.logger.warn(`Group ${groupId} not found, skipping sync`);
+      return;
+    }
+
+    const state = (await this.stellarService.getGroupState(contractAddress)) as Record<string, unknown> | null;
+    if (!state) {
+      this.logger.warn(`No state returned for contract=${contractAddress}`);
+      return;
+    }
+
+    let changed = false;
+
+    const onChainRound = typeof state['current_round'] === 'number' ? state['current_round'] : null;
+    if (onChainRound !== null && onChainRound !== group.currentRound) {
+      this.logger.log(`Group ${groupId} round ${group.currentRound} → ${onChainRound}`);
+      group.currentRound = onChainRound;
+      changed = true;
+    }
+
+    const onChainStatus = typeof state['status'] === 'string' ? (state['status'] as string).toUpperCase() : null;
+    if (
+      onChainStatus &&
+      onChainStatus !== group.status &&
+      Object.values(GroupStatus).includes(onChainStatus as GroupStatus)
+    ) {
+      this.logger.log(`Group ${groupId} status ${group.status} → ${onChainStatus}`);
+      group.status = onChainStatus as GroupStatus;
+      changed = true;
+    }
+
+    if (changed) {
+      group.staleAt = null;
+      await this.groupRepository.save(group);
+      this.logger.log(`Group ${groupId} synced successfully`);
+    } else {
+      this.logger.debug(`Group ${groupId} already in sync`);
+    }
   }
 
-  private async handleSyncAllGroups(
-    job: Job<SyncAllGroupsJobData>,
-  ): Promise<void> {
-    const { chainId, batchSize = 50 } = job.data;
-    this.logger.log(
-      `Syncing all groups chainId=${chainId} batchSize=${batchSize}`,
-    );
-    // TODO: paginate over groups and enqueue individual SyncGroupState jobs
-    // const groups = await this.groupRepository.findAllActive({ chainId });
-    // for (const group of groups) { await queue.add(JOB_NAMES.SYNC_GROUP_STATE, { groupId: group.id, ... }) }
-    this.logger.log(`All groups sync dispatched chainId=${chainId}`);
+  private async handleSyncAllGroups(job: Job<SyncAllGroupsJobData>): Promise<void> {
+    const { batchSize = 50 } = job.data;
+    this.logger.log(`Paginated sync of all ACTIVE groups batchSize=${batchSize}`);
+
+    let page = 0;
+    let dispatched = 0;
+
+    while (true) {
+      const groups = await this.groupRepository.find({
+        where: { status: GroupStatus.ACTIVE },
+        select: ['id', 'contractAddress'],
+        skip: page * batchSize,
+        take: batchSize,
+      });
+
+      if (groups.length === 0) break;
+
+      const jobs = groups
+        .filter((g) => g.contractAddress)
+        .map((g) => ({
+          name: JOB_NAMES.SYNC_GROUP_STATE,
+          data: { groupId: g.id, contractAddress: g.contractAddress!, chainId: job.data.chainId } as SyncGroupStateJobData,
+          opts: { attempts: RETRY_CONFIG.attempts, backoff: RETRY_CONFIG.backoff },
+        }));
+
+      if (jobs.length > 0) {
+        await this.groupSyncQueue.addBulk(jobs);
+        dispatched += jobs.length;
+      }
+
+      if (groups.length < batchSize) break;
+      page++;
+    }
+
+    this.logger.log(`Dispatched ${dispatched} SYNC_GROUP_STATE jobs`);
   }
 
   @OnWorkerEvent('completed')
@@ -72,11 +138,7 @@ export class GroupSyncProcessor extends WorkerHost {
       this.logger.error(
         `Group-sync job [${job.name}] id=${job.id} exhausted all retries → moving to dead-letter queue`,
       );
-      await this.deadLetterService.moveToDeadLetter(
-        job,
-        error,
-        QUEUE_NAMES.GROUP_SYNC,
-      );
+      await this.deadLetterService.moveToDeadLetter(job, error, QUEUE_NAMES.GROUP_SYNC);
     }
   }
 
@@ -87,7 +149,5 @@ export class GroupSyncProcessor extends WorkerHost {
 }
 
 export function groupSyncBackoffStrategy(attemptsMade: number): number {
-  return (
-    BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1]
-  );
+  return BACKOFF_DELAYS[attemptsMade] ?? BACKOFF_DELAYS[BACKOFF_DELAYS.length - 1];
 }
