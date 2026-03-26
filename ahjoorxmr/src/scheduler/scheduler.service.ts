@@ -1,10 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { DistributedLockService } from './services/distributed-lock.service';
 import { AuditLogService } from './services/audit-log.service';
 import { ContributionSummaryService } from './services/contribution-summary.service';
 import { GroupStatusService } from './services/group-status.service';
 import { StaleGroupDetectionService } from './services/stale-group-detection.service';
+import { RoundAdvanceService } from './services/round-advance.service';
 
 @Injectable()
 export class SchedulerService {
@@ -18,6 +20,8 @@ export class SchedulerService {
     private readonly contributionSummaryService: ContributionSummaryService,
     private readonly groupStatusService: GroupStatusService,
     private readonly staleGroupDetectionService: StaleGroupDetectionService,
+    private readonly roundAdvanceService: RoundAdvanceService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -164,6 +168,40 @@ export class SchedulerService {
     if (result) {
       this.logger.log(
         `Task ${taskName} completed successfully in ${duration}ms. Flagged ${result.flaggedCount} stale group(s).`,
+      );
+    } else {
+      this.logger.warn(`Task ${taskName} was skipped (lock not acquired)`);
+    }
+  }
+
+  /**
+   * Every-minute task: Auto-advance group rounds when deadline passes.
+   * Configurable via ROUND_ADVANCE_CRON env var (defaults to every minute).
+   */
+  @Cron(CronExpression.EVERY_MINUTE, {
+    name: 'auto-advance-rounds',
+  })
+  async handleAutoAdvanceRounds(): Promise<void> {
+    const taskName = 'auto-advance-rounds';
+    const startTime = Date.now();
+
+    this.logger.log(`Starting task: ${taskName}`);
+
+    const result = await this.lockService.withLock(
+      taskName,
+      async () => {
+        return await this.executeWithRetry(async () => {
+          return await this.roundAdvanceService.processDeadlinedGroups();
+        }, taskName);
+      },
+      55, // 55-second lock TTL — expires before next minute tick to stay idempotent
+    );
+
+    const duration = Date.now() - startTime;
+
+    if (result) {
+      this.logger.log(
+        `Task ${taskName} completed in ${duration}ms. Advanced: ${result.advanced}, Reminded: ${result.reminded}, Errors: ${result.errors}.`,
       );
     } else {
       this.logger.warn(`Task ${taskName} was skipped (lock not acquired)`);
