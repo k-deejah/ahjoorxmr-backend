@@ -7,6 +7,7 @@ import { Membership } from '../../memberships/entities/membership.entity';
 import { MembershipStatus } from '../../memberships/entities/membership-status.enum';
 import { NotificationsService } from '../../notification/notifications.service';
 import { NotificationType } from '../../notification/notification-type.enum';
+import { PayoutService } from '../payout.service';
 
 const GROUP_ID = 'group-uuid';
 
@@ -38,11 +39,13 @@ describe('RoundService', () => {
   let groupRepo: { findOne: jest.Mock; save: jest.Mock };
   let membershipRepo: { find: jest.Mock; update: jest.Mock };
   let notificationsService: { notifyBatch: jest.Mock };
+  let payoutService: { distributePayout: jest.Mock };
 
   beforeEach(async () => {
     groupRepo = { findOne: jest.fn(), save: jest.fn() };
     membershipRepo = { find: jest.fn(), update: jest.fn().mockResolvedValue(undefined) };
     notificationsService = { notifyBatch: jest.fn().mockResolvedValue([]) };
+    payoutService = { distributePayout: jest.fn().mockResolvedValue('TX_HASH') };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +53,7 @@ describe('RoundService', () => {
         { provide: getRepositoryToken(Group), useValue: groupRepo },
         { provide: getRepositoryToken(Membership), useValue: membershipRepo },
         { provide: NotificationsService, useValue: notificationsService },
+        { provide: PayoutService, useValue: payoutService },
       ],
     }).compile();
 
@@ -94,6 +98,7 @@ describe('RoundService', () => {
     expect(groupRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({ currentRound: 2, status: GroupStatus.ACTIVE }),
     );
+    expect(payoutService.distributePayout).toHaveBeenCalledWith(GROUP_ID, 1);
   });
 
   // ── ROUND_OPENED notification sent to all members ─────────────────────────
@@ -135,6 +140,7 @@ describe('RoundService', () => {
     expect(groupRepo.save).toHaveBeenCalledWith(
       expect.objectContaining({ status: GroupStatus.COMPLETED }),
     );
+    expect(payoutService.distributePayout).toHaveBeenCalledWith(GROUP_ID, 3);
     // No payment reset or notifications on completion
     expect(membershipRepo.update).not.toHaveBeenCalled();
   });

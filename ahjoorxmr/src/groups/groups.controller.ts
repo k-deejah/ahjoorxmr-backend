@@ -17,6 +17,7 @@ import {
   ParseBoolPipe,
   Version,
   SetMetadata,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -29,6 +30,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { GroupsService } from './groups.service';
+import { PayoutService } from './payout.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 import { UpdateGroupDto } from './dto/update-group.dto';
 import {
@@ -59,7 +61,10 @@ import { ErrorResponseDto } from '../common/dto/error-response.dto';
 @Controller('groups')
 @SetMetadata('deprecated', true)
 export class GroupsController {
-  constructor(private readonly groupsService: GroupsService) {}
+  constructor(
+    private readonly groupsService: GroupsService,
+    private readonly payoutService: PayoutService,
+  ) {}
 
   /**
    * Creates a new ROSCA group with status PENDING.
@@ -423,6 +428,71 @@ export class GroupsController {
     const adminWallet = req.user.walletAddress || req.user.id;
     const group = await this.groupsService.advanceRound(id, adminWallet);
     return this.toGroupResponse(group);
+  }
+
+  /**
+   * Manually triggers a payout for a specific group and round.
+   * Admin-only override endpoint.
+   *
+   * @param req - Authenticated request object
+   * @param id - The UUID of the group
+   * @param round - The round number to trigger payout for
+   * @returns The transaction hash of the payout
+   */
+  @Post(':id/rounds/:round/payout')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Manually trigger payout',
+    description:
+      'Manually triggers a payout for a specific group and round. Admin-only override.',
+  })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiParam({ name: 'round', description: 'Round number', type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Payout triggered successfully',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or group not ACTIVE',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - only group admin can trigger payout',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Group or recipient not found',
+    type: ErrorResponseDto,
+  })
+  @ApiResponse({
+    status: 502,
+    description: 'Contract invocation failed',
+    type: ErrorResponseDto,
+  })
+  @AuditLog({ action: 'TRIGGER_PAYOUT', resource: 'GROUP' })
+  async triggerManualPayout(
+    @Request() req: { user: { id: string; walletAddress: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('round', ParseIntPipe) round: number,
+  ): Promise<{ transactionHash: string }> {
+    const adminWallet = req.user.walletAddress || req.user.id;
+    const group = await this.groupsService.findOne(id);
+
+    if (group.adminWallet !== adminWallet) {
+      throw new ForbiddenException('Only the group admin can trigger payouts');
+    }
+
+    const txHash = await this.payoutService.distributePayout(id, round);
+    return { transactionHash: txHash };
   }
 
   /**

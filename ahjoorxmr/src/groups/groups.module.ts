@@ -4,6 +4,7 @@ import { GroupsController } from './groups.controller';
 import { GroupsV2Controller } from './groups-v2.controller';
 import { GroupsService } from './groups.service';
 import { RoundService } from './round.service';
+import { PayoutService } from './payout.service';
 import { Group } from './entities/group.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
@@ -23,7 +24,13 @@ import { StellarModule } from '../stellar/stellar.module';
     StellarModule,
   ],
   controllers: [GroupsController, GroupsV2Controller],
-  providers: [GroupsService, RoundService, WinstonLogger, JwtAuthGuard],
-  exports: [GroupsService, RoundService],
+  providers: [
+    GroupsService,
+    RoundService,
+    PayoutService,
+    WinstonLogger,
+    JwtAuthGuard,
+  ],
+  exports: [GroupsService, RoundService, PayoutService],
 })
 export class GroupsModule {}

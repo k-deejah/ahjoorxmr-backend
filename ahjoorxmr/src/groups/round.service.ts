@@ -7,6 +7,7 @@ import { Membership } from '../memberships/entities/membership.entity';
 import { MembershipStatus } from '../memberships/entities/membership-status.enum';
 import { NotificationsService } from '../notification/notifications.service';
 import { NotificationType } from '../notification/notification-type.enum';
+import { PayoutService } from './payout.service';
 
 @Injectable()
 export class RoundService {
@@ -18,6 +19,7 @@ export class RoundService {
     @InjectRepository(Membership)
     private readonly membershipRepository: Repository<Membership>,
     private readonly notificationsService: NotificationsService,
+    private readonly payoutService: PayoutService,
   ) {}
 
   /**
@@ -54,10 +56,23 @@ export class RoundService {
     group.currentRound += 1;
     group.staleAt = null;
 
+    const roundToPayout = group.currentRound - 1; // Payout for the round that just finished
+
     if (group.currentRound > group.totalRounds) {
       group.status = GroupStatus.COMPLETED;
       await this.groupRepository.save(group);
       this.logger.log(`Group ${groupId} completed after ${group.totalRounds} rounds`);
+
+      // Trigger payout for the last round
+      try {
+        await this.payoutService.distributePayout(groupId, roundToPayout);
+      } catch (error) {
+        this.logger.error(
+          `Failed to distribute payout for last round ${roundToPayout} in group ${groupId}: ${error.message}`,
+          error.stack,
+        );
+      }
+
       return true;
     }
 
@@ -70,6 +85,16 @@ export class RoundService {
     await this.groupRepository.save(group);
 
     this.logger.log(`Group ${groupId} advanced to round ${group.currentRound}`);
+
+    // Trigger payout for the completed round
+    try {
+      await this.payoutService.distributePayout(groupId, roundToPayout);
+    } catch (error) {
+      this.logger.error(
+        `Failed to distribute payout for round ${roundToPayout} in group ${groupId}: ${error.message}`,
+        error.stack,
+      );
+    }
 
     // Notify all members — fire-and-forget, never block the caller
     const notifications = memberships.map((m) => ({
