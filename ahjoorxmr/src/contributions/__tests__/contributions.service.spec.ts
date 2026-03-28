@@ -101,65 +101,83 @@ describe('ContributionsService', () => {
         status: GroupStatus.ACTIVE,
         currentRound: 1,
       });
-      contributionRepository.findOne!.mockResolvedValue(null); // No duplicate hash
       contributionRepository.create!.mockReturnValue(mockContribution);
       contributionRepository.save!.mockResolvedValue(mockContribution);
 
       const result = await service.createContribution(createContributionDto);
 
       expect(result).toEqual(mockContribution);
-      expect(stellarService.verifyContribution).not.toHaveBeenCalled();
+      expect(stellarService.verifyContributionForGroup).not.toHaveBeenCalled();
       expect(contributionRepository.save).toHaveBeenCalled();
     });
 
     it('should create a contribution when verification is enabled and successful', async () => {
       configService.get!.mockReturnValue(true); // VERIFY_CONTRIBUTIONS = true
-      stellarService.verifyContribution!.mockResolvedValue(true);
+      stellarService.verifyContributionForGroup!.mockResolvedValue(true);
       groupRepository.findOne!.mockResolvedValue({
         id: 'group-1',
         status: GroupStatus.ACTIVE,
         currentRound: 1,
       });
-      contributionRepository.findOne!.mockResolvedValue(null);
       contributionRepository.create!.mockReturnValue(mockContribution);
       contributionRepository.save!.mockResolvedValue(mockContribution);
 
       const result = await service.createContribution(createContributionDto);
 
       expect(result).toEqual(mockContribution);
-      expect(stellarService.verifyContribution).toHaveBeenCalledWith('0x123');
+      expect(stellarService.verifyContributionForGroup).toHaveBeenCalledWith(
+        '0x123',
+        null,
+      );
       expect(contributionRepository.save).toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException when verification fails', async () => {
-      configService.get!.mockReturnValue(true);
-      stellarService.verifyContribution!.mockResolvedValue(false);
+    it('should throw ConflictException when database returns 23505 for transaction hash', async () => {
+      configService.get!.mockReturnValue(false);
       groupRepository.findOne!.mockResolvedValue({
         id: 'group-1',
         status: GroupStatus.ACTIVE,
         currentRound: 1,
       });
+      contributionRepository.create!.mockReturnValue(mockContribution);
 
-      await expect(
-        service.createContribution(createContributionDto),
-      ).rejects.toThrow(BadRequestException);
-      expect(contributionRepository.save).not.toHaveBeenCalled();
-    });
+      const dbError = new QueryFailedError('', [], new Error());
+      (dbError as any).code = '23505';
+      (dbError as any).constraint = 'UQ_contributions_transactionHash'; // or similar
 
-    it('should throw ConflictException when transaction hash already exists', async () => {
-      configService.get!.mockReturnValue(true);
-      stellarService.verifyContribution!.mockResolvedValue(true);
-      groupRepository.findOne!.mockResolvedValue({
-        id: 'group-1',
-        status: GroupStatus.ACTIVE,
-        currentRound: 1,
-      });
-      contributionRepository.findOne!.mockResolvedValue(mockContribution);
+      contributionRepository.save!.mockRejectedValue(dbError);
 
       await expect(
         service.createContribution(createContributionDto),
       ).rejects.toThrow(ConflictException);
-      expect(contributionRepository.save).not.toHaveBeenCalled();
+      await expect(
+        service.createContribution(createContributionDto),
+      ).rejects.toThrow('Contribution with this transaction hash already exists');
+    });
+
+    it('should throw ConflictException when database returns 23505 for user/round constraint', async () => {
+      configService.get!.mockReturnValue(false);
+      groupRepository.findOne!.mockResolvedValue({
+        id: 'group-1',
+        status: GroupStatus.ACTIVE,
+        currentRound: 1,
+      });
+      contributionRepository.create!.mockReturnValue(mockContribution);
+
+      const dbError = new QueryFailedError('', [], new Error());
+      (dbError as any).code = '23505';
+      (dbError as any).constraint = 'UQ_contributions_userId_groupId_roundNumber';
+
+      contributionRepository.save!.mockRejectedValue(dbError);
+
+      await expect(
+        service.createContribution(createContributionDto),
+      ).rejects.toThrow(ConflictException);
+      await expect(
+        service.createContribution(createContributionDto),
+      ).rejects.toThrow(
+        'A contribution for this user and round already exists in this group',
+      );
     });
 
     it('should throw BadRequestException when group does not exist', async () => {

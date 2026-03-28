@@ -152,27 +152,13 @@ export class ContributionsService {
         }
       }
 
-      // Check for duplicate transaction hash
-      const existingContribution = await this.contributionRepository.findOne({
-        where: { transactionHash },
-      });
-
-      if (existingContribution) {
-        this.logger.warn(
-          `Contribution with transaction hash ${transactionHash} already exists`,
-          'ContributionsService',
-        );
-        throw new ConflictException(
-          'Contribution with this transaction hash already exists',
-        );
-      }
-
       // Create contribution
       const contribution = this.contributionRepository.create(
         createContributionDto,
       );
 
-      // Save to database
+      // Save to database - this will throw a 23505 error on unique constraint violations
+      // (transactionHash or the userId/groupId/roundNumber composite constraint)
       const savedContribution =
         await this.contributionRepository.save(contribution);
 
@@ -198,13 +184,22 @@ export class ContributionsService {
       if (error instanceof QueryFailedError) {
         const pgError = error as any;
 
-        // Unique constraint violation (duplicate transaction hash)
+        // Unique constraint violation
         if (pgError.code === '23505') {
+          const constraint = pgError.constraint || '';
           this.logger.error(
-            `Unique constraint violation for transaction hash ${transactionHash}`,
+            `Unique constraint violation: ${constraint}`,
             error.stack,
             'ContributionsService',
           );
+
+          if (constraint === 'UQ_contributions_userId_groupId_roundNumber') {
+            throw new ConflictException(
+              'A contribution for this user and round already exists in this group',
+            );
+          }
+
+          // Default duplicate message (e.g. for transactionHash)
           throw new ConflictException(
             'Contribution with this transaction hash already exists',
           );

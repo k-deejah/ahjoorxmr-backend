@@ -18,6 +18,7 @@ import { User } from '../../users/entities/user.entity';
  */
 @Entity('contributions')
 @Unique(['transactionHash'])
+@Unique(['userId', 'groupId', 'roundNumber'])
 export class Contribution {
   @PrimaryGeneratedColumn('uuid')
   id: string;
