@@ -1,13 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
+import { IsValidStellarAddress } from '../common/validators/is-valid-stellar-address.validator';
 
 export class ChallengeRequestDto {
   @ApiProperty({
-    description: 'Stellar wallet address',
+    description: 'Stellar wallet address (public key)',
     example: 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
   })
   @IsString()
   @IsNotEmpty()
+  @IsValidStellarAddress()
   walletAddress: string;
 }
 
@@ -22,11 +24,12 @@ export class ChallengeResponseDto {
 
 export class VerifyRequestDto {
   @ApiProperty({
-    description: 'Stellar wallet address',
+    description: 'Stellar wallet address (public key)',
     example: 'GXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX',
   })
   @IsString()
   @IsNotEmpty()
+  @IsValidStellarAddress()
   walletAddress: string;
 
   @ApiProperty({

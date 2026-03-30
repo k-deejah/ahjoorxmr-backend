@@ -7,6 +7,7 @@ import {
   Request,
   Version,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import {
   ChallengeRequestDto,
@@ -19,11 +20,12 @@ import { Public } from '../common/decorators/public.decorator';
 @Controller('auth')
 @Version('1')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public()
   @Post('challenge')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 300000 } })
   async challenge(
     @Body() dto: ChallengeRequestDto,
   ): Promise<ChallengeResponseDto> {
@@ -36,6 +38,7 @@ export class AuthController {
   @Public()
   @Post('verify')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 300000 } })
   async verify(@Body() dto: VerifyRequestDto) {
     return this.authService.verifySignature(
       dto.walletAddress,
