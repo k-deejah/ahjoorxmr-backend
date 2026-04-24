@@ -15,6 +15,7 @@ import { ConfigService } from '@nestjs/config';
 import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
 import { RoundService } from '../groups/round.service';
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
+import { WebhookService } from '../webhooks/webhook.service';
 
 /**
  * Service responsible for managing contribution operations in ROSCA groups.
@@ -31,6 +32,7 @@ export class ContributionsService {
     private readonly stellarService: StellarService,
     private readonly configService: ConfigService,
     private readonly roundService: RoundService,
+    private readonly webhookService: WebhookService,
   ) {}
 
   /**
@@ -203,6 +205,17 @@ export class ContributionsService {
         `Contribution created with id ${savedContribution.id} for user ${userId} in group ${groupId}`,
         'ContributionsService',
       );
+
+      // Trigger webhook notification asynchronously
+      this.webhookService
+        .notifyContributionVerified(savedContribution)
+        .catch((error) => {
+          this.logger.error(
+            `Failed to trigger webhook for contribution ${savedContribution.id}: ${error.message}`,
+            error.stack,
+            'ContributionsService',
+          );
+        });
 
       // Attempt automatic round advancement — no-ops if not all members have paid
       await this.roundService.tryAdvanceRound(groupId);

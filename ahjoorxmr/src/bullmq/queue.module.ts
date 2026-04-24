@@ -1,4 +1,4 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { BullModule, InjectQueue } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -29,6 +29,7 @@ import { Contribution } from '../contributions/entities/contribution.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { PayoutTransaction } from '../groups/entities/payout-transaction.entity';
 import { Logger } from '@nestjs/common';
+import { MetricsModule } from '../metrics/metrics.module';
 
 /**
  * Custom backoff strategy registered globally via BullMQ worker options.
@@ -67,6 +68,7 @@ const bullBoardAuthMiddleware = (req: Request, res: Response, next: NextFunction
     MailModule,
     StellarModule,
     NotificationsModule,
+    forwardRef(() => MetricsModule),
     TypeOrmModule.forFeature([
       Group,
       Contribution,

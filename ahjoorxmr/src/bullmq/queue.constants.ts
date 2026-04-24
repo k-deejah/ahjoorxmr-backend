@@ -3,6 +3,7 @@ export const QUEUE_NAMES = {
   EVENT_SYNC: 'event-sync-queue',
   GROUP_SYNC: 'group-sync-queue',
   PAYOUT_RECONCILIATION: 'payout-reconciliation-queue',
+  WEBHOOK_DELIVERY: 'webhook-delivery-queue',
   DEAD_LETTER: 'dead-letter-queue',
 } as const;
 
@@ -25,6 +26,9 @@ export const JOB_NAMES = {
 
   // Payout reconciliation jobs
   RECONCILE_PAYOUT: 'reconcile-payout',
+
+  // Webhook delivery jobs
+  DELIVER_WEBHOOK: 'deliver-webhook',
 
   // Dead-letter
   DEAD_LETTER: 'dead-letter',

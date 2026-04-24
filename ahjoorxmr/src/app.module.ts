@@ -44,6 +44,9 @@ import { ReplicaModule } from './database/replica.module';
 import { DatabaseRoutingModule } from './database/database-routing.module';
 import { ReadReplicaInterceptor } from './common/interceptors/read-replica.interceptor';
 import { ReadQueryRunner } from './database/read-query-runner';
+import { MetricsModule } from './metrics/metrics.module';
+import { MetricsInterceptor } from './metrics/metrics.interceptor';
+import { WebhookModule } from './webhooks/webhook.module';
 
 @Module({
   imports: [
@@ -120,6 +123,8 @@ import { ReadQueryRunner } from './database/read-query-runner';
     FeatureFlagsModule,
     CommonModule,
     MailModule,
+    MetricsModule,
+    WebhookModule,
   ],
   controllers: [AppController],
   providers: [
@@ -146,6 +151,8 @@ import { ReadQueryRunner } from './database/read-query-runner';
       useClass: ReadReplicaInterceptor,
     },
     ReadQueryRunner,
+      useClass: MetricsInterceptor,
+    },
   ],
 })
 export class AppModule implements NestModule {

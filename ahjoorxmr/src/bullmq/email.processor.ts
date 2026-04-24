@@ -9,6 +9,7 @@ import {
 } from './queue.interfaces';
 import { DeadLetterService } from './dead-letter.service';
 import { MailService } from '../mail/mail.service';
+import { MetricsService } from '../metrics/metrics.service';
 
 @Processor(QUEUE_NAMES.EMAIL, {
   concurrency: 5,
@@ -20,6 +21,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
   constructor(
     private readonly deadLetterService: DeadLetterService,
     private readonly mailService: MailService,
+    private readonly metricsService: MetricsService,
   ) {
     super();
   }
@@ -107,6 +109,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
   @OnWorkerEvent('completed')
   onCompleted(job: Job): void {
     this.logger.log(`Email job completed [${job.name}] id=${job.id}`);
+    this.metricsService.incrementBullMQJob(QUEUE_NAMES.EMAIL, 'completed');
   }
 
   @OnWorkerEvent('failed')
@@ -116,6 +119,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleDestroy {
       `Email job failed [${job.name}] id=${job.id} attempt=${job.attemptsMade}/${maxAttempts}: ${error.message}`,
       error.stack,
     );
+    this.metricsService.incrementBullMQJob(QUEUE_NAMES.EMAIL, 'failed');
 
     if (job.attemptsMade >= maxAttempts) {
       this.logger.error(

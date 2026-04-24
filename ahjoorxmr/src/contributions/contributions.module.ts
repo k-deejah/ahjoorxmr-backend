@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContributionsController } from './contributions.controller';
 import { ContributionsService } from './contributions.service';
@@ -13,6 +13,7 @@ import { StellarModule } from '../stellar/stellar.module';
 import { ConfigModule } from '@nestjs/config';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notification/notifications.module';
+import { WebhookModule } from '../webhooks/webhook.module';
 
 /**
  * ContributionsModule manages member contributions in a group-based ROSCA system.
@@ -26,6 +27,7 @@ import { NotificationsModule } from '../notification/notifications.module';
     ConfigModule,
     GroupsModule,
     NotificationsModule,
+    forwardRef(() => WebhookModule),
   ],
   controllers: [ContributionsController],
   providers: [ContributionsService, WinstonLogger, ApiKeyGuard, JwtAuthGuard],

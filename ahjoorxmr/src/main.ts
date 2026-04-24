@@ -1,11 +1,13 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ClassSerializerInterceptor, ValidationPipe, VersioningType } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { ApiVersionDeprecationInterceptor } from './common/interceptors/api-version-deprecation.interceptor';
+import { DeprecationInterceptor } from './common/interceptors/deprecation.interceptor';
 import { WinstonLogger } from './common/logger/winston.logger';
 import { RateLimitHeadersInterceptor } from './throttler/interceptors/rate-limit-headers.interceptor';
 import { initializeTracing } from './common/tracing/tracing';
@@ -45,12 +47,14 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Global interceptors
+  const configService = app.get(ConfigService);
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new TransformInterceptor(),
     new ClassSerializerInterceptor(reflector),
     new RateLimitHeadersInterceptor(reflector),
     new ApiVersionDeprecationInterceptor(reflector),
+    new DeprecationInterceptor(reflector, configService),
   );
 
   // Enable CORS

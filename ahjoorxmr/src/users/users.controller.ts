@@ -1,13 +1,17 @@
 import {
   Controller,
   Get,
+  Post,
+  Delete,
   Param,
   Query,
   SerializeOptions,
   UseGuards,
   Version,
+  Request,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import {
   ApiTags,
   ApiOperation,
@@ -25,12 +29,16 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { UserResponseDto } from './dto/user-response.dto';
+import { GdprService } from './gdpr.service';
 
 @ApiTags('Users')
 @Controller('users')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly gdprService: GdprService,
+  ) {}
   @Get()
   @Version('1')
   @Roles('admin')
@@ -146,17 +154,43 @@ export class UsersController {
     summary: 'Get user profile by ID',
     description: 'Returns safe public fields for the requested user profile.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'User profile retrieved successfully',
-    type: UserResponseDto,
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'User not found',
-  })
+  @ApiResponse({ status: 200, type: UserResponseDto })
+  @ApiResponse({ status: 404, description: 'User not found' })
   async findOne(@Param('id') id: string): Promise<UserResponseDto> {
     const user = await this.usersService.findById(id);
     return new UserResponseDto(user);
+  }
+
+  @Post('me/data-export')
+  @Version('1')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Request GDPR data export',
+    description: 'Queues a job to collect all user data and email a presigned S3 download link.',
+  })
+  @ApiResponse({ status: 202, description: 'Export job queued' })
+  async requestDataExport(
+    @Request() req: { user: { id: string }; ip: string },
+  ): Promise<{ message: string }> {
+    await this.gdprService.requestDataExport(req.user.id, req.ip);
+    return { message: 'Data export queued. You will receive an email with the download link.' };
+  }
+
+  @Delete('me')
+  @Version('1')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Request account erasure (GDPR Art. 17)',
+    description: 'Anonymizes PII and hard-deletes KYC records. 30-day cooldown enforced.',
+  })
+  @ApiResponse({ status: 202, description: 'Erasure job queued' })
+  @ApiResponse({ status: 429, description: 'Erasure request already submitted within 30 days' })
+  async requestErasure(
+    @Request() req: { user: { id: string }; ip: string },
+  ): Promise<{ message: string }> {
+    await this.gdprService.requestErasure(req.user.id, req.ip);
+    return { message: 'Erasure request queued. Your account will be anonymized shortly.' };
   }
 }
