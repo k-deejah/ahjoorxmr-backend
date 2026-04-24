@@ -40,6 +40,9 @@ import { CommonModule } from './common/common.module';
 import { MailModule } from './mail/mail.module';
 import { MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
+import { MetricsModule } from './metrics/metrics.module';
+import { MetricsInterceptor } from './metrics/metrics.interceptor';
+import { WebhookModule } from './webhooks/webhook.module';
 
 @Module({
   imports: [
@@ -111,6 +114,8 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     FeatureFlagsModule,
     CommonModule,
     MailModule,
+    MetricsModule,
+    WebhookModule,
   ],
   controllers: [AppController],
   providers: [
@@ -131,6 +136,10 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     {
       provide: APP_INTERCEPTOR,
       useClass: SlowRequestInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
     },
   ],
 })

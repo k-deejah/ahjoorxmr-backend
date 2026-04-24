@@ -12,6 +12,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
   controllers: [AuditController],
   providers: [
     AuditService,
+    ConfigModule,
     {
       provide: APP_INTERCEPTOR,
       useClass: AuditLogInterceptor,

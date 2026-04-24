@@ -212,6 +212,44 @@ Swagger documentation is available for each version:
 - **Version 1**: `http://localhost:3000/api/docs/v1`
 - **Version 2** (when available): `http://localhost:3000/api/docs/v2`
 
+## Metrics and Monitoring
+
+The application exposes Prometheus metrics for monitoring and observability.
+
+### Metrics Endpoint
+
+Access metrics at `GET /metrics` (requires API key authentication):
+
+```bash
+curl -H "x-api-key: your-api-key" http://localhost:3000/metrics
+```
+
+### Available Metrics
+
+- **HTTP Metrics**: Request rate, duration (p95/p99), and status codes
+- **BullMQ Metrics**: Job completion and failure rates by queue
+- **Stellar Metrics**: Blockchain transaction success/failure rates
+- **Database Metrics**: Active connection pool monitoring
+- **Node.js Metrics**: CPU, memory, event loop, garbage collection
+
+### Grafana Dashboard
+
+A pre-configured Grafana dashboard is available at `docs/grafana-dashboard.json` with panels for:
+- HTTP request rate and latency
+- BullMQ job processing rates
+- Stellar transaction monitoring
+- Database connection pool status
+
+### Configuration
+
+Set the metrics API key in your `.env` file:
+
+```env
+METRICS_API_KEY=your-strong-random-secret
+```
+
+For detailed metrics documentation, see [src/metrics/README.md](src/metrics/README.md).
+
 ## Deployment
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.

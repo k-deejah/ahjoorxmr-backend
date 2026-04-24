@@ -1,14 +1,18 @@
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { BullModule, InjectQueue } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Queue } from 'bullmq';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { ExpressAdapter } from '@bull-board/express';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import * as passport from 'passport';
+import { Request, Response, NextFunction } from 'express';
 
 import { QUEUE_NAMES, BACKOFF_DELAYS, RETRY_CONFIG } from './queue.constants';
 import { QueueService } from './queue.service';
 import { QueueAdminController } from './queue-admin.controller';
 import { DeadLetterService } from './dead-letter.service';
-import { BullBoardService } from './bull-board.service';
 import { EmailProcessor } from './email.processor';
 import { EventSyncProcessor } from './event-sync.processor';
 import { GroupSyncProcessor } from './group-sync.processor';
@@ -19,11 +23,13 @@ import { JobFailure } from './entities/job-failure.entity';
 import { MailModule } from '../mail/mail.module';
 import { StellarModule } from '../stellar/stellar.module';
 import { NotificationsModule } from '../notification/notifications.module';
+import { AuditModule } from '../audit/audit.module';
 import { Group } from '../groups/entities/group.entity';
 import { Contribution } from '../contributions/entities/contribution.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { PayoutTransaction } from '../groups/entities/payout-transaction.entity';
 import { Logger } from '@nestjs/common';
+import { MetricsModule } from '../metrics/metrics.module';
 
 /**
  * Custom backoff strategy registered globally via BullMQ worker options.
@@ -45,12 +51,24 @@ const sharedQueueOptions = {
   },
 };
 
+const bullBoardAuthMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  passport.authenticate('jwt', { session: false }, (err: any, user: any) => {
+    if (err || !user || user.role !== 'admin') {
+      return res.status(403).send('Forbidden - Admin role required');
+    }
+    req.user = user;
+    next();
+  })(req, res, next);
+};
+
 @Module({
   imports: [
     ConfigModule,
+    AuditModule,
     MailModule,
     StellarModule,
     NotificationsModule,
+    forwardRef(() => MetricsModule),
     TypeOrmModule.forFeature([
       Group,
       Contribution,
@@ -90,12 +108,25 @@ const sharedQueueOptions = {
         defaultJobOptions: { removeOnComplete: false, removeOnFail: false },
       },
     ),
+
+    // Integrate BullBoard
+    BullBoardModule.forRoot({
+      route: '/admin/queues',
+      adapter: ExpressAdapter,
+      middleware: [bullBoardAuthMiddleware],
+    }),
+    BullBoardModule.forFeature(
+      { name: QUEUE_NAMES.EMAIL, adapter: BullMQAdapter },
+      { name: QUEUE_NAMES.EVENT_SYNC, adapter: BullMQAdapter },
+      { name: QUEUE_NAMES.GROUP_SYNC, adapter: BullMQAdapter },
+      { name: QUEUE_NAMES.PAYOUT_RECONCILIATION, adapter: BullMQAdapter },
+      { name: QUEUE_NAMES.DEAD_LETTER, adapter: BullMQAdapter },
+    ),
   ],
   controllers: [QueueAdminController, JobFailuresAdminController],
   providers: [
     DeadLetterService,
     QueueService,
-    BullBoardService,
     EmailProcessor,
     EventSyncProcessor,
     GroupSyncProcessor,
@@ -104,7 +135,6 @@ const sharedQueueOptions = {
   ],
   exports: [
     QueueService,
-    BullBoardService,
     JobFailureService,
     // Re-export BullModule so consuming modules can inject the queues directly if needed
     BullModule,
