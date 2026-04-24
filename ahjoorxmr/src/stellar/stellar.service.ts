@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
+  Inject,
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,6 +15,7 @@ import { ContractStateGuard } from './contract-state-guard.service';
 import type { Group } from '../groups/entities/group.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import type { ContractInvocationResult } from './contract-invocation.types';
+import { MetricsService } from '../metrics/metrics.service';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -60,6 +62,8 @@ export class StellarService {
     private readonly logger: WinstonLogger,
     @Inject(forwardRef(() => ContractStateGuard))
     private readonly contractStateGuard: ContractStateGuard,
+    @Inject(forwardRef(() => MetricsService))
+    private readonly metricsService: MetricsService,
   ) {
     this.rpcUrl = this.configService.get<string>('STELLAR_RPC_URL') ?? '';
     this.defaultContractAddress =
@@ -187,11 +191,14 @@ export class StellarService {
         result?.hash ?? result?.id ?? result?.transactionHash ?? txHashToStore ?? String(result);
 
       if (!txHash) {
+        this.metricsService.incrementStellarTransaction(false);
         throw new Error('No transaction hash returned from Stellar RPC');
       }
 
+      this.metricsService.incrementStellarTransaction(true);
       return txHash;
     } catch (error) {
+      this.metricsService.incrementStellarTransaction(false);
       throw this.mapRpcError('Failed to disburse payout on-chain', error);
     }
   }

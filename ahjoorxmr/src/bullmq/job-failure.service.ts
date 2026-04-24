@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, FindOptionsWhere } from 'typeorm';
+import { Repository, Between, FindOptionsWhere, In, LessThan } from 'typeorm';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { JobFailure } from './entities/job-failure.entity';
@@ -13,6 +13,19 @@ export interface JobFailureFilter {
   to?: string;
   page?: number;
   limit?: number;
+}
+
+export interface BulkRetryFilter {
+  ids?: string[];
+  queueName?: string;
+  errorType?: string;
+  createdBefore?: string;
+}
+
+export interface RetryResult {
+  id: string;
+  success: boolean;
+  error?: string;
 }
 
 @Injectable()
@@ -28,6 +41,16 @@ export class JobFailureService {
     @InjectQueue(QUEUE_NAMES.PAYOUT_RECONCILIATION)
     private readonly payoutQueue: Queue,
   ) {}
+
+  private getQueueByName(queueName: string): Queue | undefined {
+    const map: Record<string, Queue> = {
+      [QUEUE_NAMES.EMAIL]: this.emailQueue,
+      [QUEUE_NAMES.EVENT_SYNC]: this.eventSyncQueue,
+      [QUEUE_NAMES.GROUP_SYNC]: this.groupSyncQueue,
+      [QUEUE_NAMES.PAYOUT_RECONCILIATION]: this.payoutQueue,
+    };
+    return map[queueName];
+  }
 
   async persist(
     jobId: string,
@@ -47,6 +70,7 @@ export class JobFailureService {
           stackTrace: error.stack ?? null,
           attemptNumber,
           data,
+          status: 'PENDING',
         }),
       );
     } catch (err) {
@@ -77,8 +101,84 @@ export class JobFailureService {
     return { data, total };
   }
 
+  /**
+   * Retry a single job by its JobFailure record ID.
+   * Re-enqueues the original job payload and marks the record as RETRYING.
+   */
+  async retryById(id: string): Promise<{ record: JobFailure; enqueuedJobId: string }> {
+    const record = await this.repo.findOneOrFail({ where: { id } });
+    const queue = this.getQueueByName(record.queueName);
+
+    if (!queue) {
+      throw new Error(`Unknown queue: ${record.queueName}`);
+    }
+
+    const newJob = await queue.add(record.jobName, record.data ?? {}, {
+      removeOnComplete: { count: 1000, age: 86_400 },
+      removeOnFail: false,
+    });
+
+    await this.repo.update(id, {
+      status: 'RETRYING',
+      retryCount: record.retryCount + 1,
+      lastRetriedAt: new Date(),
+    });
+
+    const updated = await this.repo.findOneOrFail({ where: { id } });
+    return { record: updated, enqueuedJobId: String(newJob.id) };
+  }
+
+  /**
+   * Bulk retry: accepts an array of IDs or a filter object.
+   */
+  async bulkRetry(input: BulkRetryFilter): Promise<{ results: RetryResult[]; total: number }> {
+    let records: JobFailure[] = [];
+
+    if (input.ids && input.ids.length > 0) {
+      records = await this.repo.find({ where: { id: In(input.ids) } });
+    } else {
+      const where: FindOptionsWhere<JobFailure> = { status: 'PENDING' };
+      if (input.queueName) where.queueName = input.queueName;
+      if (input.createdBefore) where.failedAt = LessThan(new Date(input.createdBefore));
+      records = await this.repo.find({ where });
+
+      // errorType filter (substring match on error column)
+      if (input.errorType) {
+        records = records.filter((r) =>
+          r.error?.toLowerCase().includes(input.errorType!.toLowerCase()),
+        );
+      }
+    }
+
+    const results: RetryResult[] = [];
+    for (const record of records) {
+      try {
+        const queue = this.getQueueByName(record.queueName);
+        if (!queue) throw new Error(`Unknown queue: ${record.queueName}`);
+
+        const newJob = await queue.add(record.jobName, record.data ?? {}, {
+          removeOnComplete: { count: 1000, age: 86_400 },
+          removeOnFail: false,
+        });
+
+        await this.repo.update(record.id, {
+          status: 'RETRYING',
+          retryCount: record.retryCount + 1,
+          lastRetriedAt: new Date(),
+        });
+
+        this.logger.log(`Bulk-retried job failure ${record.id} → new job ${newJob.id}`);
+        results.push({ id: record.id, success: true });
+      } catch (err) {
+        this.logger.warn(`Bulk retry failed for ${record.id}: ${(err as Error).message}`);
+        results.push({ id: record.id, success: false, error: (err as Error).message });
+      }
+    }
+
+    return { results, total: results.length };
+  }
+
   async retryAll(): Promise<{ retried: number }> {
-    // Get all failed jobs from all queues and re-enqueue them
     const queues: Queue[] = [
       this.emailQueue,
       this.eventSyncQueue,
@@ -92,7 +192,6 @@ export class JobFailureService {
       for (const job of failedJobs) {
         try {
           await job.retry();
-          // Increment retryCount in our persistence table
           await this.repo.increment({ jobId: String(job.id) }, 'retryCount', 1);
           retried++;
         } catch (err) {

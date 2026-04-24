@@ -1,8 +1,11 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, Index } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
+
+export type JobFailureStatus = 'PENDING' | 'RETRYING' | 'RESOLVED';
 
 @Entity('job_failures')
 @Index(['queueName', 'failedAt'])
 @Index(['jobName'])
+@Index(['status'])
 export class JobFailure {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -19,6 +22,9 @@ export class JobFailure {
   @CreateDateColumn({ type: 'timestamptz' })
   failedAt: Date;
 
+  @UpdateDateColumn({ type: 'timestamptz' })
+  updatedAt: Date;
+
   @Column('text')
   error: string;
 
@@ -33,4 +39,14 @@ export class JobFailure {
 
   @Column('int', { default: 0 })
   retryCount: number;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: 'PENDING',
+  })
+  status: JobFailureStatus;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  lastRetriedAt: Date | null;
 }
