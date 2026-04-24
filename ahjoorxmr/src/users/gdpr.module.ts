@@ -9,6 +9,9 @@ import { Membership } from '../memberships/entities/membership.entity';
 import { Contribution } from '../contributions/entities/contribution.entity';
 import { KycDocument } from '../kyc/entities/kyc-document.entity';
 import { AuditLog } from '../audit/entities/audit-log.entity';
+import { Notification } from '../notification/notification.entity';
+import { RefreshToken } from '../auth/entities/refresh-token.entity';
+import { Group } from '../groups/entities/group.entity';
 import { MailModule } from '../mail/mail.module';
 import { GDPR_QUEUE_NAME } from './gdpr.constants';
 
@@ -16,7 +19,16 @@ import { GDPR_QUEUE_NAME } from './gdpr.constants';
   imports: [
     ConfigModule,
     MailModule,
-    TypeOrmModule.forFeature([User, Membership, Contribution, KycDocument, AuditLog]),
+    TypeOrmModule.forFeature([
+      User,
+      Membership,
+      Contribution,
+      KycDocument,
+      AuditLog,
+      Notification,
+      RefreshToken,
+      Group,
+    ]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

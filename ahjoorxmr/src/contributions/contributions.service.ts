@@ -180,6 +180,8 @@ export class ContributionsService {
           amount: createContributionDto.amount,
           transactionHash,
           timestamp: createContributionDto.timestamp,
+          assetCode: group.assetCode ?? 'XLM',
+          assetIssuer: group.assetIssuer ?? null,
         })
         .orIgnore()
         .execute();

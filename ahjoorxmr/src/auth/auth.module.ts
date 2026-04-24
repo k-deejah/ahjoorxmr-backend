@@ -10,12 +10,14 @@ import { UsersModule } from '../users/users.module';
 import { TwoFactorService } from './two-factor.service';
 import { StellarModule } from '../stellar/stellar.module';
 import { RefreshToken } from './entities/refresh-token.entity';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
     UsersModule,
     PassportModule,
     StellarModule,
+    MailModule,
     TypeOrmModule.forFeature([RefreshToken]),
     JwtModule.registerAsync({
       imports: [ConfigModule],

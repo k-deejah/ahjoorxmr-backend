@@ -24,6 +24,20 @@ export class Group extends BaseEntity {
   @Column('varchar', { length: 255 })
   token: string;
 
+  /**
+   * Stellar asset code for contributions/payouts (e.g. 'XLM', 'USDC').
+   * Defaults to 'XLM' (native asset). Max 12 chars per Stellar spec.
+   */
+  @Column({ type: 'varchar', length: 12, default: 'XLM' })
+  assetCode: string;
+
+  /**
+   * Stellar account ID of the asset issuer.
+   * Null for native XLM. Required for any non-XLM asset.
+   */
+  @Column({ type: 'varchar', length: 56, nullable: true, default: null })
+  assetIssuer: string | null;
+
   @Column('int')
   roundDuration: number;
 

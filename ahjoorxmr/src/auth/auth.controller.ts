@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Body,
   UseGuards,
   Version,
@@ -93,9 +94,13 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Tokens refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
+  async refresh(@Body() refreshTokenDto: RefreshTokenDto, @Req() req: any) {
     try {
-      return await this.authService.refreshTokens(refreshTokenDto.refreshToken);
+      return await this.authService.refreshTokens(refreshTokenDto.refreshToken, {
+        ipAddress: req.ip,
+        deviceId: req.headers['x-device-id'] ?? null,
+        deviceName: req.headers['x-device-name'] ?? null,
+      });
     } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
@@ -224,6 +229,42 @@ export class AuthController {
     );
     await this.authService.updateRefreshToken(user.id, tokens.refreshToken);
     return tokens;
+  }
+
+  // ── Admin endpoints ────────────────────────────────────────────────────────
+
+  @Get('sessions')
+  @Version('1')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'List active sessions',
+    description: 'Returns all active sessions (device, IP, lastUsedAt) for the authenticated user.',
+  })
+  @ApiResponse({ status: 200, description: 'Sessions listed successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async listSessions(@Req() req: any) {
+    return this.authService.listSessions(req.user.id);
+  }
+
+  @Delete('sessions/:id')
+  @Version('1')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({
+    summary: 'Revoke a specific session',
+    description: 'Revokes a single session by its ID. Only the owning user may revoke.',
+  })
+  @ApiParam({ name: 'id', description: 'Session (RefreshToken) UUID', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Session revoked' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  async revokeSession(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) sessionId: string,
+  ): Promise<void> {
+    await this.authService.revokeSession(req.user.id, sessionId);
   }
 
   // ── Admin endpoints ────────────────────────────────────────────────────────

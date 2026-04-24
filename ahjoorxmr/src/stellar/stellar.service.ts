@@ -89,12 +89,26 @@ export class StellarService {
   }
 
   /**
+   * Builds a Stellar Asset object from an asset code and optional issuer.
+   * Returns native asset for XLM, or a custom asset for everything else.
+   */
+  buildAsset(assetCode: string, assetIssuer: string | null): any {
+    const code = (assetCode ?? 'XLM').toUpperCase();
+    if (code === 'XLM' || !assetIssuer) {
+      return (StellarSdk as any).Asset.native();
+    }
+    return new (StellarSdk as any).Asset(code, assetIssuer);
+  }
+
+  /**
    * Disburses a payout to a recipient from the group's smart contract.
    * Submits an on-chain transaction and returns the transaction hash.
    *
    * @param contractAddress - The group's on-chain contract address
    * @param recipientWallet - The recipient's Stellar wallet address
    * @param amount - The contribution amount to disburse (as string)
+   * @param assetCode - Asset code for the payout (default: XLM)
+   * @param assetIssuer - Asset issuer for non-XLM assets
    * @returns The transaction hash of the submitted payout
    */
   async disbursePayout(
@@ -102,6 +116,8 @@ export class StellarService {
     recipientWallet: string,
     amount: string,
     onBeforeSubmit?: (txHash: string) => Promise<void>,
+    assetCode?: string,
+    assetIssuer?: string | null,
   ): Promise<string> {
     if (!contractAddress) {
       throw new BadRequestException(
@@ -144,12 +160,14 @@ export class StellarService {
       let operation: unknown;
       try {
         const contract = new (StellarSdk as any).Contract(contractAddress);
+        const asset = this.buildAsset(assetCode ?? 'XLM', assetIssuer ?? null);
         operation = contract.call(
           'disburse_payout',
           (StellarSdk as any).nativeToScVal(recipientWallet, {
             type: 'address',
           }),
           (StellarSdk as any).nativeToScVal(BigInt(amount), { type: 'i128' }),
+          (StellarSdk as any).nativeToScVal(asset),
         );
       } catch {
         operation = { contractAddress, method: 'disburse_payout' };
@@ -358,6 +376,26 @@ export class StellarService {
       return 'PENDING';
     } catch (error) {
       throw this.mapRpcError('Unable to fetch transaction status', error);
+    }
+  }
+
+  /**
+   * Returns the list of Stellar assets an account has trustlines for.
+   * Used by the admin endpoint to validate group asset setup.
+   */
+  async getAccountTrustlines(
+    accountId: string,
+  ): Promise<Array<{ assetCode: string; assetIssuer: string | null; balance: string }>> {
+    this.validateConfiguration();
+    try {
+      const account = await this.server.loadAccount(accountId);
+      return (account.balances as any[]).map((b: any) => ({
+        assetCode: b.asset_type === 'native' ? 'XLM' : b.asset_code,
+        assetIssuer: b.asset_type === 'native' ? null : b.asset_issuer,
+        balance: b.balance,
+      }));
+    } catch (error) {
+      throw this.mapRpcError(`Failed to load account trustlines for ${accountId}`, error);
     }
   }
 

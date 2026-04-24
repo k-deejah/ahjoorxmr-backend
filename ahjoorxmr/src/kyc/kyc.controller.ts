@@ -6,6 +6,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Version,
+  Inject,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -17,6 +18,7 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
+import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../notification/current-user.decorator';
 import { KycService } from './kyc.service';
@@ -27,25 +29,37 @@ import { KycDocumentResponseDto } from './dto/kyc-document-response.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('users/me/kyc')
 export class KycController {
-  constructor(private readonly kycService: KycService) {}
+  private readonly maxFileSizeBytes: number;
+
+  constructor(
+    private readonly kycService: KycService,
+    private readonly configService: ConfigService,
+  ) {
+    const maxMb = this.configService.get<number>('KYC_MAX_FILE_SIZE_MB', 10);
+    this.maxFileSizeBytes = maxMb * 1024 * 1024;
+  }
 
   @Post()
   @Version('1')
-  @UseInterceptors(FileInterceptor('document', { storage: memoryStorage() }))
+  @UseInterceptors(
+    FileInterceptor('document', {
+      storage: memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 }, // hard cap; actual limit from env applied in service
+    }),
+  )
   @ApiOperation({ summary: 'Upload KYC document' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
       type: 'object',
-      properties: {
-        document: { type: 'string', format: 'binary' },
-      },
+      properties: { document: { type: 'string', format: 'binary' } },
       required: ['document'],
     },
   })
   @ApiResponse({ status: 201, type: KycDocumentResponseDto })
-  @ApiResponse({ status: 413, description: 'File exceeds 5 MB limit' })
-  @ApiResponse({ status: 415, description: 'Unsupported file type' })
+  @ApiResponse({ status: 413, description: 'File exceeds size limit' })
+  @ApiResponse({ status: 415, description: 'Unsupported file type (magic-byte check failed)' })
+  @ApiResponse({ status: 422, description: 'Virus detected in upload' })
   async uploadDocument(
     @CurrentUser('id') userId: string,
     @UploadedFile() file: Express.Multer.File,
@@ -68,9 +82,7 @@ export class KycController {
   @ApiOperation({ summary: 'Get latest KYC document' })
   @ApiResponse({ status: 200, type: KycDocumentResponseDto })
   @ApiResponse({ status: 404, description: 'No KYC document found' })
-  async getDocument(
-    @CurrentUser('id') userId: string,
-  ): Promise<KycDocumentResponseDto> {
+  async getDocument(@CurrentUser('id') userId: string): Promise<KycDocumentResponseDto> {
     const doc = await this.kycService.getLatestDocument(userId);
     return {
       id: doc.id,

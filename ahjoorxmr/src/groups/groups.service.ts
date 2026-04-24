@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Group } from './entities/group.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
@@ -34,6 +35,7 @@ export class GroupsService {
     private readonly logger: WinstonLogger,
     private readonly notificationsService: NotificationsService,
     private readonly stellarService: StellarService,
+    private readonly configService: ConfigService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
   ) {}
@@ -69,6 +71,18 @@ export class GroupsService {
         );
       }
 
+      // Validate asset code against allow-list
+      const assetCode = createGroupDto.assetCode ?? 'XLM';
+      const allowedRaw = this.configService.get<string>('ALLOWED_ASSET_CODES', 'XLM,USDC');
+      const allowedCodes = allowedRaw.split(',').map((c) => c.trim().toUpperCase());
+      if (!allowedCodes.includes(assetCode.toUpperCase())) {
+        throw new BadRequestException(
+          `Asset code "${assetCode}" is not supported. Allowed: ${allowedCodes.join(', ')}`,
+        );
+      }
+
+      const assetIssuer = assetCode.toUpperCase() === 'XLM' ? null : (createGroupDto.assetIssuer ?? null);
+
       const group = this.groupRepository.create({
         ...createGroupDto,
         maxMembers,
@@ -76,6 +90,8 @@ export class GroupsService {
         status: GroupStatus.PENDING,
         currentRound: 0,
         contractAddress: createGroupDto.contractAddress ?? null,
+        assetCode: assetCode.toUpperCase(),
+        assetIssuer,
       });
 
       const savedGroup = await this.groupRepository.save(group);
