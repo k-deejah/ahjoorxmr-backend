@@ -135,6 +135,50 @@ export class StellarService {
 
     this.validateConfiguration();
 
+    // Check issuer balance before attempting payout
+    const issuerAccount = this.configService.get<string>(
+      'STELLAR_ISSUER_ACCOUNT',
+    );
+    const minBalanceXlm = this.configService.get<number>(
+      'STELLAR_MIN_BALANCE_ALERT_XLM',
+      5,
+    );
+
+    if (issuerAccount) {
+      try {
+        const { currentBalance, isSufficient } = await this.checkAccountBalance(
+          issuerAccount,
+          minBalanceXlm,
+        );
+        if (!isSufficient) {
+          this.logger.warn(
+            `Payout blocked: Insufficient issuer balance. Current: ${currentBalance} XLM, Required: ${minBalanceXlm} XLM`,
+          );
+          throw new HttpException(
+            {
+              statusCode: 409,
+              error: 'Conflict',
+              message: 'Insufficient issuer balance',
+              data: {
+                error: 'Insufficient issuer balance',
+                currentBalance,
+                minimumRequired: minBalanceXlm.toString(),
+              },
+            },
+            409,
+          );
+        }
+      } catch (error) {
+        // If balance check fails (RPC error), log but don't block payout
+        if (error instanceof HttpException && error.getStatus() === 409) {
+          throw error;
+        }
+        this.logger.warn(
+          `Failed to check issuer balance: ${error instanceof Error ? error.message : String(error)}. Proceeding with payout.`,
+        );
+      }
+    }
+
     // Perform state validation before submission
     try {
       await this.contractStateGuard.validatePreconditions(
@@ -147,7 +191,9 @@ export class StellarService {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error(`Precondition validation failed for disbursePayout: ${error.message}`);
+      this.logger.error(
+        `Precondition validation failed for disbursePayout: ${error.message}`,
+      );
     }
 
     try {
@@ -192,12 +238,15 @@ export class StellarService {
         tx = await this.server.prepareTransaction(tx);
       }
 
-      let txHashToStore = typeof (tx as any).hash === 'function' ? (tx as any).hash().toString('hex') : null;
+      let txHashToStore =
+        typeof (tx as any).hash === 'function'
+          ? (tx as any).hash().toString('hex')
+          : null;
       if (!txHashToStore && (tx as any).id) {
-         txHashToStore = (tx as any).id;
+        txHashToStore = (tx as any).id;
       }
       if (!txHashToStore) {
-         txHashToStore = `temp_hash_${Date.now()}`;
+        txHashToStore = `temp_hash_${Date.now()}`;
       }
 
       if (onBeforeSubmit) {
@@ -206,7 +255,11 @@ export class StellarService {
 
       const result = await this.server.sendTransaction(tx);
       const txHash: string =
-        result?.hash ?? result?.id ?? result?.transactionHash ?? txHashToStore ?? String(result);
+        result?.hash ??
+        result?.id ??
+        result?.transactionHash ??
+        txHashToStore ??
+        String(result);
 
       if (!txHash) {
         this.metricsService.incrementStellarTransaction(false);
@@ -385,7 +438,9 @@ export class StellarService {
    */
   async getAccountTrustlines(
     accountId: string,
-  ): Promise<Array<{ assetCode: string; assetIssuer: string | null; balance: string }>> {
+  ): Promise<
+    Array<{ assetCode: string; assetIssuer: string | null; balance: string }>
+  > {
     this.validateConfiguration();
     try {
       const account = await this.server.loadAccount(accountId);
@@ -395,8 +450,56 @@ export class StellarService {
         balance: b.balance,
       }));
     } catch (error) {
-      throw this.mapRpcError(`Failed to load account trustlines for ${accountId}`, error);
+      throw this.mapRpcError(
+        `Failed to load account trustlines for ${accountId}`,
+        error,
+      );
     }
+  }
+
+  /**
+   * Get the native XLM balance for an account (for balance monitoring).
+   * Returns the balance as a string (e.g., "1000.5000000").
+   *
+   * @param accountId - The Stellar account ID (G-address)
+   * @returns The native XLM balance as a string
+   * @throws HttpException if the account cannot be loaded
+   */
+  async getNativeBalance(accountId: string): Promise<string> {
+    this.validateConfiguration();
+    try {
+      const account = await this.server.loadAccount(accountId);
+      const balances = account.balances as any[];
+      const nativeBalance = balances.find(
+        (b: any) => b.asset_type === 'native',
+      );
+      return nativeBalance?.balance ?? '0';
+    } catch (error) {
+      throw this.mapRpcError(
+        `Failed to load native balance for ${accountId}`,
+        error,
+      );
+    }
+  }
+
+  /**
+   * Check if an account has sufficient XLM balance for transactions.
+   * Returns the balance and whether it's below the minimum threshold.
+   *
+   * @param accountId - The Stellar account ID to check
+   * @param minimumXlm - The minimum balance threshold in XLM (default: 5)
+   * @returns Object with currentBalance and isSufficient flag
+   */
+  async checkAccountBalance(
+    accountId: string,
+    minimumXlm: number = 5,
+  ): Promise<{ currentBalance: string; isSufficient: boolean }> {
+    const balance = await this.getNativeBalance(accountId);
+    const balanceNum = parseFloat(balance);
+    return {
+      currentBalance: balance,
+      isSufficient: balanceNum >= minimumXlm,
+    };
   }
 
   verifySignature(
@@ -421,8 +524,7 @@ export class StellarService {
     if (error instanceof BadRequestException) {
       return false;
     }
-    const msg =
-      error instanceof Error ? error.message : String(error ?? '');
+    const msg = error instanceof Error ? error.message : String(error ?? '');
     return /timeout|etimedout|econnreset|socket hang up|502|503|network|fetch failed/i.test(
       msg,
     );
@@ -479,18 +581,30 @@ export class StellarService {
     let operation: any;
     try {
       const contract = new (StellarSdk as any).Contract(contractAddress);
-      operation = contract.call(method, ...args.map(arg => {
-          if (typeof arg === 'string' && (arg.startsWith('G') || arg.startsWith('C'))) {
-              return (StellarSdk as any).nativeToScVal(arg, { type: 'address' });
+      operation = contract.call(
+        method,
+        ...args.map((arg) => {
+          if (
+            typeof arg === 'string' &&
+            (arg.startsWith('G') || arg.startsWith('C'))
+          ) {
+            return (StellarSdk as any).nativeToScVal(arg, { type: 'address' });
           }
           if (typeof arg === 'bigint' || typeof arg === 'number') {
-              return (StellarSdk as any).nativeToScVal(BigInt(arg), { type: 'i128' });
+            return (StellarSdk as any).nativeToScVal(BigInt(arg), {
+              type: 'i128',
+            });
           }
           return (StellarSdk as any).nativeToScVal(arg);
-      }));
+        }),
+      );
     } catch (err) {
-      this.logger.error(`Failed to build operation for simulation: ${err.message}`);
-      throw new BadRequestException(`Invalid contract call parameters: ${err.message}`);
+      this.logger.error(
+        `Failed to build operation for simulation: ${err.message}`,
+      );
+      throw new BadRequestException(
+        `Invalid contract call parameters: ${err.message}`,
+      );
     }
 
     const tx = new (StellarSdk as any).TransactionBuilder(sourceAccount, {

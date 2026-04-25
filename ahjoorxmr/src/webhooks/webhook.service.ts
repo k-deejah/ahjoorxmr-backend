@@ -11,7 +11,10 @@ import { Queue } from 'bullmq';
 import { createHmac, randomBytes } from 'crypto';
 import axios from 'axios';
 import { Webhook } from './entities/webhook.entity';
-import { WebhookDelivery, WebhookDeliveryStatus } from './entities/webhook-delivery.entity';
+import {
+  WebhookDelivery,
+  WebhookDeliveryStatus,
+} from './entities/webhook-delivery.entity';
 import {
   WebhookPayload,
   WebhookDeliveryJobData,
@@ -25,6 +28,8 @@ export enum WebhookEventType {
   CONTRIBUTION_CONFIRMED = 'CONTRIBUTION_CONFIRMED',
   KYC_APPROVED = 'KYC_APPROVED',
   MEMBER_JOINED = 'MEMBER_JOINED',
+  BALANCE_ALERT_LOW = 'BALANCE_ALERT_LOW',
+  BALANCE_ALERT_RECOVERED = 'BALANCE_ALERT_RECOVERED',
 }
 
 @Injectable()
@@ -96,7 +101,11 @@ export class WebhookService {
     payload: WebhookPayload,
     webhookId: string,
     attemptNumber = 1,
-  ): Promise<{ statusCode: number; responseBody: string; deliveryTime: number }> {
+  ): Promise<{
+    statusCode: number;
+    responseBody: string;
+    deliveryTime: number;
+  }> {
     const start = Date.now();
     const payloadString = JSON.stringify(payload);
     const signature = this.generateSignature(payloadString, secret);
@@ -149,8 +158,14 @@ export class WebhookService {
   async testWebhook(
     webhookId: string,
     ownerId?: string,
-  ): Promise<{ statusCode: number; responseBody: string; deliveryTime: number }> {
-    const webhook = await this.webhookRepository.findOne({ where: { id: webhookId } });
+  ): Promise<{
+    statusCode: number;
+    responseBody: string;
+    deliveryTime: number;
+  }> {
+    const webhook = await this.webhookRepository.findOne({
+      where: { id: webhookId },
+    });
     if (!webhook) throw new NotFoundException('Webhook not found');
     if (ownerId && webhook.userId !== ownerId) throw new ForbiddenException();
 
@@ -160,7 +175,12 @@ export class WebhookService {
       data: { message: 'This is a test event', webhookId },
     };
 
-    return this.deliverWebhook(webhook.url, webhook.secret, testPayload, webhookId);
+    return this.deliverWebhook(
+      webhook.url,
+      webhook.secret,
+      testPayload,
+      webhookId,
+    );
   }
 
   async replayDelivery(deliveryId: string, ownerId?: string): Promise<void> {
@@ -169,7 +189,8 @@ export class WebhookService {
       relations: ['webhook'],
     });
     if (!delivery) throw new NotFoundException('Delivery not found');
-    if (ownerId && delivery.webhook.userId !== ownerId) throw new ForbiddenException();
+    if (ownerId && delivery.webhook.userId !== ownerId)
+      throw new ForbiddenException();
 
     const jobData: WebhookDeliveryJobData = {
       webhookId: delivery.webhookId,
@@ -185,8 +206,13 @@ export class WebhookService {
     });
   }
 
-  async getDeliveries(webhookId: string, ownerId?: string): Promise<WebhookDelivery[]> {
-    const webhook = await this.webhookRepository.findOne({ where: { id: webhookId } });
+  async getDeliveries(
+    webhookId: string,
+    ownerId?: string,
+  ): Promise<WebhookDelivery[]> {
+    const webhook = await this.webhookRepository.findOne({
+      where: { id: webhookId },
+    });
     if (!webhook) throw new NotFoundException('Webhook not found');
     if (ownerId && webhook.userId !== ownerId) throw new ForbiddenException();
 
@@ -197,14 +223,27 @@ export class WebhookService {
     });
   }
 
-  async createWebhook(userId: string, url: string, eventTypes: string[]): Promise<Webhook> {
+  async createWebhook(
+    userId: string,
+    url: string,
+    eventTypes: string[],
+  ): Promise<Webhook> {
     const secret = randomBytes(32).toString('hex');
-    const webhook = this.webhookRepository.create({ userId, url, secret, eventTypes, isActive: true });
+    const webhook = this.webhookRepository.create({
+      userId,
+      url,
+      secret,
+      eventTypes,
+      isActive: true,
+    });
     return this.webhookRepository.save(webhook);
   }
 
   async getUserWebhooks(userId: string): Promise<Webhook[]> {
-    return this.webhookRepository.find({ where: { userId }, order: { createdAt: 'DESC' } });
+    return this.webhookRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
   }
 
   async getAllWebhooks(): Promise<Webhook[]> {
@@ -212,7 +251,11 @@ export class WebhookService {
   }
 
   async deleteWebhook(webhookId: string, userId: string): Promise<void> {
-    const result = await this.webhookRepository.delete({ id: webhookId, userId });
-    if (result.affected === 0) throw new NotFoundException('Webhook not found or unauthorized');
+    const result = await this.webhookRepository.delete({
+      id: webhookId,
+      userId,
+    });
+    if (result.affected === 0)
+      throw new NotFoundException('Webhook not found or unauthorized');
   }
 }
