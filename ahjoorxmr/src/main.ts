@@ -17,6 +17,7 @@ async function bootstrap() {
   initializeTracing();
   const app = await NestFactory.create(AppModule, {
     logger: new WinstonLogger(),
+    rawBody: true, // Required for HMAC webhook signature validation
   });
 
   // Enable graceful shutdown hooks for SIGTERM and SIGINT
