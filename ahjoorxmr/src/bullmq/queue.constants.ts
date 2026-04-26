@@ -5,6 +5,7 @@ export const QUEUE_NAMES = {
   PAYOUT_RECONCILIATION: 'payout-reconciliation-queue',
   WEBHOOK_DELIVERY: 'webhook-delivery-queue',
   DEAD_LETTER: 'dead-letter-queue',
+  TX_CONFIRMATION: 'tx-confirmation-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -29,6 +30,9 @@ export const JOB_NAMES = {
 
   // Webhook delivery jobs
   DELIVER_WEBHOOK: 'deliver-webhook',
+
+  // Transaction confirmation
+  CONFIRM_TRANSACTION: 'confirm-transaction',
 
   // Dead-letter
   DEAD_LETTER: 'dead-letter',

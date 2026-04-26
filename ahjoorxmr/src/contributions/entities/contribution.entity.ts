@@ -12,6 +12,12 @@ import {
 import { Group } from '../../groups/entities/group.entity';
 import { User } from '../../users/entities/user.entity';
 
+export enum ContributionStatus {
+  PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  FAILED = 'FAILED',
+}
+
 /**
  * Contribution entity representing a member's on-chain contribution to a ROSCA group.
  * Tracks contribution details including amount, round number, and blockchain transaction hash.
@@ -62,6 +68,9 @@ export class Contribution {
   /** Stellar issuer account for the asset. Null for native XLM. */
   @Column({ type: 'varchar', length: 56, nullable: true, default: null })
   assetIssuer: string | null;
+
+  @Column({ type: 'enum', enum: ContributionStatus, default: ContributionStatus.PENDING })
+  status: ContributionStatus;
 
   @CreateDateColumn()
   createdAt: Date;

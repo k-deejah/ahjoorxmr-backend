@@ -4,6 +4,7 @@ import { BaseEntity } from '../../common/entities/base.entity';
 import { Membership } from '../../memberships/entities/membership.entity';
 import { KycStatus } from '../../kyc/entities/kyc-status.enum';
 import { KycDocument } from '../../kyc/entities/kyc-document.entity';
+import { encryptedTransformer } from '../../common/encryption/field-encryption.transformer';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -16,7 +17,7 @@ export enum UserRole {
  * Contains authentication, profile, and relationship data.
  */
 @Entity('users')
-@Index(['email'], { unique: true, where: 'email IS NOT NULL' })
+@Index(['emailBlindIndex'], { unique: true, where: '"emailBlindIndex" IS NOT NULL' })
 @Index(['walletAddress'], { unique: true })
 @Index(['createdAt'])
 export class User extends BaseEntity {
@@ -24,8 +25,11 @@ export class User extends BaseEntity {
   @Column({ type: 'varchar', length: 255, unique: true })
   walletAddress: string;
 
-  @Column({ type: 'varchar', length: 255, nullable: true, unique: true })
+  @Column({ type: 'varchar', length: 500, nullable: true, transformer: encryptedTransformer })
   email?: string | null;
+
+  @Column({ type: 'varchar', length: 64, nullable: true })
+  emailBlindIndex?: string | null;
 
   @Column({ type: 'boolean', default: false })
   emailVerified: boolean;
@@ -54,7 +58,7 @@ export class User extends BaseEntity {
 
   // Two-Factor Authentication
   @Exclude()
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 500, nullable: true, transformer: encryptedTransformer })
   twoFactorSecret?: string | null;
 
   @Column({ type: 'boolean', default: false })

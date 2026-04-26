@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere, FindManyOptions, IsNull } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { MembershipStatus } from '../../memberships/entities/membership-status.enum';
+import { hmacBlindIndex } from '../../common/encryption/field-encryption.transformer';
 
 /**
  * Base repository with common operations
@@ -31,8 +32,9 @@ export class UserRepository extends Repository<User> {
    * Find user by email
    */
   async findByEmail(email: string): Promise<User | null> {
+    const blindIndex = hmacBlindIndex(email);
     return this.repository.findOne({
-      where: { email },
+      where: { emailBlindIndex: blindIndex },
       relations: ['memberships'],
     });
   }

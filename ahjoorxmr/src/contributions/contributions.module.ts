@@ -14,6 +14,7 @@ import { ConfigModule } from '@nestjs/config';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notification/notifications.module';
 import { WebhookModule } from '../webhooks/webhook.module';
+import { QueueModule } from '../bullmq/queue.module';
 
 /**
  * ContributionsModule manages member contributions in a group-based ROSCA system.
@@ -28,6 +29,7 @@ import { WebhookModule } from '../webhooks/webhook.module';
     GroupsModule,
     NotificationsModule,
     forwardRef(() => WebhookModule),
+    forwardRef(() => QueueModule),
   ],
   controllers: [ContributionsController],
   providers: [ContributionsService, WinstonLogger, ApiKeyGuard, JwtAuthGuard],

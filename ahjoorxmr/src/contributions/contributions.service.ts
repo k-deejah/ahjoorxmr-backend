@@ -16,6 +16,7 @@ import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
 import { RoundService } from '../groups/round.service';
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 import { WebhookService } from '../webhooks/webhook.service';
+import { QueueService } from '../bullmq/queue.service';
 
 /**
  * Service responsible for managing contribution operations in ROSCA groups.
@@ -33,6 +34,7 @@ export class ContributionsService {
     private readonly configService: ConfigService,
     private readonly roundService: RoundService,
     private readonly webhookService: WebhookService,
+    private readonly queueService: QueueService,
   ) {}
 
   /**
@@ -214,6 +216,23 @@ export class ContributionsService {
         .catch((error) => {
           this.logger.error(
             `Failed to trigger webhook for contribution ${savedContribution.id}: ${error.message}`,
+            error.stack,
+            'ContributionsService',
+          );
+        });
+
+      // Enqueue transaction confirmation tracking job
+      const timeoutMs = this.configService.get<number>('TX_CONFIRMATION_TIMEOUT_MS', 120_000);
+      this.queueService
+        .addTxConfirmation({
+          contributionId: savedContribution.id,
+          transactionHash: savedContribution.transactionHash,
+          userId: savedContribution.userId,
+          deadline: Date.now() + timeoutMs,
+        })
+        .catch((error) => {
+          this.logger.error(
+            `Failed to enqueue tx confirmation for contribution ${savedContribution.id}: ${error.message}`,
             error.stack,
             'ContributionsService',
           );

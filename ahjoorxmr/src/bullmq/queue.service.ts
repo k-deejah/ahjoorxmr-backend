@@ -13,6 +13,7 @@ import {
   SyncAllGroupsJobData,
   ReconcilePayoutJobData,
 } from './queue.interfaces';
+import { TxConfirmationJobData } from './tx-confirmation.processor';
 
 export interface QueueStats {
   name: string;
@@ -56,6 +57,8 @@ export class QueueService {
     private readonly payoutReconciliationQueue: Queue,
     @InjectQueue(QUEUE_NAMES.DEAD_LETTER)
     private readonly deadLetterQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.TX_CONFIRMATION)
+    private readonly txConfirmationQueue: Queue,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -173,21 +176,34 @@ export class QueueService {
     );
   }
 
+  async addTxConfirmation(data: TxConfirmationJobData, opts?: Partial<JobsOptions>) {
+    return this.txConfirmationQueue.add(
+      JOB_NAMES.CONFIRM_TRANSACTION,
+      data,
+      defaultJobOptions({
+        attempts: 1, // processor handles its own polling loop
+        jobId: `tx_confirm:${data.transactionHash}`,
+        ...opts,
+      }),
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Stats
   // ---------------------------------------------------------------------------
   async getStats(): Promise<AllQueueStats> {
-    const [emailStats, eventStats, groupStats, payoutStats, dlStats] =
+    const [emailStats, eventStats, groupStats, payoutStats, dlStats, txStats] =
       await Promise.all([
         this.getQueueStats(this.emailQueue),
         this.getQueueStats(this.eventSyncQueue),
         this.getQueueStats(this.groupSyncQueue),
         this.getQueueStats(this.payoutReconciliationQueue),
         this.getQueueStats(this.deadLetterQueue),
+        this.getQueueStats(this.txConfirmationQueue),
       ]);
 
     return {
-      queues: [emailStats, eventStats, groupStats, payoutStats],
+      queues: [emailStats, eventStats, groupStats, payoutStats, txStats],
       deadLetter: dlStats,
       retrievedAt: new Date().toISOString(),
     };
@@ -223,6 +239,7 @@ export class QueueService {
       this.groupSyncQueue,
       this.payoutReconciliationQueue,
       this.deadLetterQueue,
+      this.txConfirmationQueue,
     ];
   }
 
