@@ -111,6 +111,17 @@ export class AuditService {
     }
   }
 
+  /**
+   * Returns the last 100 impersonation events for compliance review.
+   */
+  async findImpersonationLogs(): Promise<AuditLog[]> {
+    return this.auditLogRepository.find({
+      where: { action: 'IMPERSONATION_REQUEST' },
+      order: { timestamp: 'DESC' },
+      take: 100,
+    });
+  }
+
   async exportAuditLogs(
     query: AuditExportQueryDto,
   ): Promise<{ logs: AuditLog[]; count: number }> {

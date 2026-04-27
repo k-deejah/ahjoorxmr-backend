@@ -4,10 +4,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AdminGuard } from './admin.guard';
 import { AdminController } from './admin.controller';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
+import { AuditModule } from '../audit/audit.module';
+import { BlockImpersonationGuard } from './block-impersonation.guard';
 
 @Module({
   imports: [
     ApiKeysModule,
+    AuditModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -17,7 +20,7 @@ import { ApiKeysModule } from '../api-keys/api-keys.module';
     }),
   ],
   controllers: [AdminController],
-  providers: [AdminGuard],
-  exports: [AdminGuard],
+  providers: [AdminGuard, BlockImpersonationGuard],
+  exports: [AdminGuard, BlockImpersonationGuard],
 })
 export class AdminModule {}
