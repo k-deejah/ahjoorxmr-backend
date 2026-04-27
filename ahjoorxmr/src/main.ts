@@ -3,6 +3,9 @@ import { ClassSerializerInterceptor, ValidationPipe, VersioningType } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
+import { IoAdapter } from '@nestjs/platform-socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import Redis from 'ioredis';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -22,6 +25,25 @@ async function bootstrap() {
 
   // Enable graceful shutdown hooks for SIGTERM and SIGINT
   app.enableShutdownHooks();
+
+  // Socket.io adapter — Redis for multi-pod fan-out when SOCKETIO_REDIS_HOST is set
+  const configService = app.get(ConfigService);
+  const socketRedisHost = configService.get<string>('SOCKETIO_REDIS_HOST');
+  if (socketRedisHost) {
+    const socketRedisPort = configService.get<number>('SOCKETIO_REDIS_PORT', 6379);
+    const pubClient = new Redis({ host: socketRedisHost, port: socketRedisPort });
+    const subClient = pubClient.duplicate();
+    const redisIoAdapter = new IoAdapter(app);
+    const origCreate = redisIoAdapter.createIOServer.bind(redisIoAdapter);
+    redisIoAdapter.createIOServer = (port: number, options?: any) => {
+      const server = origCreate(port, options);
+      server.adapter(createAdapter(pubClient, subClient));
+      return server;
+    };
+    app.useWebSocketAdapter(redisIoAdapter);
+  } else {
+    app.useWebSocketAdapter(new IoAdapter(app));
+  }
 
   // Get Reflector for interceptors
   const reflector = app.get(Reflector);
@@ -49,7 +71,6 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
 
   // Global interceptors
-  const configService = app.get(ConfigService);
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
     new TransformInterceptor(),
