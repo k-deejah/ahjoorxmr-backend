@@ -5,7 +5,6 @@ import {
   Inject,
   Injectable,
   InternalServerErrorException,
-  Inject,
   forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +15,7 @@ import type { Group } from '../groups/entities/group.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import type { ContractInvocationResult } from './contract-invocation.types';
 import { MetricsService } from '../metrics/metrics.service';
+import { withStellarSpan } from '../common/tracing/stellar-tracing';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -112,6 +112,35 @@ export class StellarService {
    * @returns The transaction hash of the submitted payout
    */
   async disbursePayout(
+    contractAddress: string,
+    recipientWallet: string,
+    amount: string,
+    onBeforeSubmit?: (txHash: string) => Promise<void>,
+    assetCode?: string,
+    assetIssuer?: string | null,
+  ): Promise<string> {
+    return withStellarSpan(
+      'stellar.submit_transaction',
+      { network: this.networkPassphrase, contractAddress },
+      async (span) => {
+        span.setAttributes({
+          'stellar.operation': 'disburse_payout',
+          'stellar.recipient': recipientWallet,
+          'stellar.amount': amount,
+        });
+        return this.disbursePayout_impl(
+          contractAddress,
+          recipientWallet,
+          amount,
+          onBeforeSubmit,
+          assetCode,
+          assetIssuer,
+        );
+      },
+    );
+  }
+
+  private async disbursePayout_impl(
     contractAddress: string,
     recipientWallet: string,
     amount: string,
@@ -322,6 +351,17 @@ export class StellarService {
   }
 
   async verifyContribution(txHash: string): Promise<boolean> {
+    return withStellarSpan(
+      'stellar.get_transaction',
+      { network: this.networkPassphrase },
+      async (span) => {
+        span.setAttribute('stellar.tx_hash', txHash);
+        return this.verifyContribution_impl(txHash);
+      },
+    );
+  }
+
+  private async verifyContribution_impl(txHash: string): Promise<boolean> {
     if (!txHash) {
       throw new BadRequestException('Transaction hash is required');
     }
@@ -635,6 +675,20 @@ export class StellarService {
   }
 
   public async invokeContractMethod(
+    contractAddress: string,
+    method: string,
+  ): Promise<ContractInvocationResult> {
+    return withStellarSpan(
+      'stellar.simulate_transaction',
+      { network: this.networkPassphrase, contractAddress },
+      async (span) => {
+        span.setAttribute('stellar.method', method);
+        return this.invokeContractMethod_impl(contractAddress, method);
+      },
+    );
+  }
+
+  private async invokeContractMethod_impl(
     contractAddress: string,
     method: string,
   ): Promise<ContractInvocationResult> {

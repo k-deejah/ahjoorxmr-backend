@@ -54,7 +54,7 @@ export class AuthController {
 
   @Post('login')
   @Version('1')
-  @Throttle({ default: { limit: 5, ttl: 900000 } })
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'User login' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
@@ -66,7 +66,7 @@ export class AuthController {
 
   @Post('register')
   @Version('1')
-  @Throttle({ default: { limit: 10, ttl: 3600000 } })
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'User registration' })
   @ApiResponse({ status: 201, description: 'Registration successful' })
   @ApiResponse({ status: 409, description: 'Email already exists' })

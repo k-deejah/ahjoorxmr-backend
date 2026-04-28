@@ -186,20 +186,20 @@ export class CustomThrottlerGuard extends ThrottlerGuard {
   }
 
   /**
-   * Get tracker key for rate limiting
-   * Uses user ID for authenticated requests, IP for anonymous
+   * Get tracker key for rate limiting.
+   * Uses IP + User-Agent fingerprint to prevent trivial bypass by cycling IPs.
+   * Falls back to user ID for authenticated requests.
    */
   protected async getTracker(req: Request): Promise<string> {
     const user = (req as any).user;
-
-    // Use user ID if authenticated
-    if (user && user.id) {
+    if (user?.id) {
       return `user:${user.id}`;
     }
 
-    // Use IP address for anonymous requests
     const ip = this.extractIp(req);
-    return `ip:${ip}`;
+    const ua = (req.headers['user-agent'] ?? 'unknown').slice(0, 128);
+    // Combine IP + UA so cycling one alone doesn't reset the counter
+    return `ip:${ip}:ua:${Buffer.from(`${ip}:${ua}`).toString('base64').slice(0, 32)}`;
   }
 
   /**

@@ -14,6 +14,7 @@ import {
   ReconcilePayoutJobData,
 } from './queue.interfaces';
 import { TxConfirmationJobData } from './tx-confirmation.processor';
+import { injectTraceContext } from '../common/tracing/stellar-tracing';
 
 export interface QueueStats {
   name: string;
@@ -37,12 +38,18 @@ function defaultJobOptions(overrides: Partial<JobsOptions> = {}): JobsOptions {
     attempts: RETRY_CONFIG.attempts,
     backoff: {
       type: 'custom',
-      // The custom strategy is registered globally via createBullBoard / BullMQ worker options
     },
     removeOnComplete: { count: 1000, age: 24 * 60 * 60 },
-    removeOnFail: false, // keep failed jobs for inspection
+    removeOnFail: false,
     ...overrides,
   };
+}
+
+/** Attach W3C traceparent to job data so processors can restore the span. */
+function withTraceContext<T extends Record<string, unknown>>(data: T): T & { _traceContext: Record<string, string> } {
+  const carrier: Record<string, string> = {};
+  injectTraceContext(carrier);
+  return { ...data, _traceContext: carrier };
 }
 
 @Injectable()
@@ -137,14 +144,10 @@ export class QueueService {
     data: SyncGroupStateJobData,
     opts?: Partial<JobsOptions>,
   ) {
-    const mergedOpts: Partial<JobsOptions> = {
-      ...opts,
-      jobId: data.groupId,
-    };
-
+    const mergedOpts: Partial<JobsOptions> = { ...opts, jobId: data.groupId };
     return this.groupSyncQueue.add(
       JOB_NAMES.SYNC_GROUP_STATE,
-      data,
+      withTraceContext(data),
       defaultJobOptions(mergedOpts),
     );
   }
