@@ -21,6 +21,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { TransferAdminDto } from './dto/transfer-admin.dto';
 import { MembershipStatus } from '../memberships/entities/membership-status.enum';
 import { AuditService } from '../audit/audit.service';
+import { GroupTemplatesService } from './group-templates.service';
 
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 
@@ -43,19 +44,23 @@ export class GroupsService {
     private readonly auditService: AuditService,
     @InjectDataSource()
     private readonly dataSource: DataSource,
+    private readonly groupTemplatesService: GroupTemplatesService,
   ) {}
 
   /**
    * Creates a new ROSCA group with status PENDING.
    * The adminWallet is taken from the authenticated user's wallet (passed in, not from DTO).
+   * If templateId is provided, template config is merged as defaults (explicit DTO fields override template values).
    *
    * @param createGroupDto - Group creation data
    * @param adminWallet - Wallet address of the authenticated admin user
+   * @param userId - UUID of the authenticated user (needed for template visibility check)
    * @returns The created Group entity
    */
   async createGroup(
     createGroupDto: CreateGroupDto,
     adminWallet: string,
+    userId?: string,
   ): Promise<Group> {
     this.logger.log(
       `Creating group "${createGroupDto.name}" for admin ${adminWallet}`,
@@ -63,21 +68,32 @@ export class GroupsService {
     );
 
     try {
-      const maxMembers =
-        createGroupDto.maxMembers ?? createGroupDto.totalRounds;
+      let finalDto = { ...createGroupDto };
 
-      if (maxMembers !== createGroupDto.totalRounds) {
+      // If templateId is provided, merge template config as defaults
+      if (createGroupDto.templateId && userId) {
+        const template = await this.groupTemplatesService.findTemplateById(
+          createGroupDto.templateId,
+          userId,
+        );
+        finalDto = this.groupTemplatesService.mergeTemplateConfig(template, finalDto);
+      }
+
+      const maxMembers =
+        finalDto.maxMembers ?? finalDto.totalRounds;
+
+      if (maxMembers !== finalDto.totalRounds) {
         throw new BadRequestException('maxMembers must equal totalRounds');
       }
 
-      if (createGroupDto.minMembers > maxMembers) {
+      if (finalDto.minMembers > maxMembers) {
         throw new BadRequestException(
           'minMembers must be less than or equal to maxMembers',
         );
       }
 
       // Validate asset code against allow-list
-      const assetCode = createGroupDto.assetCode ?? 'XLM';
+      const assetCode = finalDto.assetCode ?? 'XLM';
       const allowedRaw = this.configService.get<string>('ALLOWED_ASSET_CODES', 'XLM,USDC');
       const allowedCodes = allowedRaw.split(',').map((c) => c.trim().toUpperCase());
       if (!allowedCodes.includes(assetCode.toUpperCase())) {
@@ -86,20 +102,32 @@ export class GroupsService {
         );
       }
 
-      const assetIssuer = assetCode.toUpperCase() === 'XLM' ? null : (createGroupDto.assetIssuer ?? null);
+      const assetIssuer = assetCode.toUpperCase() === 'XLM' ? null : (finalDto.assetIssuer ?? null);
 
       const group = this.groupRepository.create({
-        ...createGroupDto,
+        ...finalDto,
         maxMembers,
         adminWallet,
         status: GroupStatus.PENDING,
         currentRound: 0,
-        contractAddress: createGroupDto.contractAddress ?? null,
+        contractAddress: finalDto.contractAddress ?? null,
         assetCode: assetCode.toUpperCase(),
         assetIssuer,
+        payoutOrderStrategy: finalDto.payoutOrderStrategy
+          ? (finalDto.payoutOrderStrategy as PayoutOrderStrategy)
+          : PayoutOrderStrategy.SEQUENTIAL,
+        penaltyRate: finalDto.penaltyRate ?? 0.05,
+        gracePeriodHours: finalDto.gracePeriodHours ?? 24,
       });
 
       const savedGroup = await this.groupRepository.save(group);
+
+      // Atomically increment template usage count if template was used
+      if (createGroupDto.templateId) {
+        await this.groupTemplatesService.incrementUsageCount(
+          createGroupDto.templateId,
+        );
+      }
 
       this.logger.log(
         `Group created with id ${savedGroup.id} for admin ${adminWallet}`,

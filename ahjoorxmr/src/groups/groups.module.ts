@@ -6,6 +6,7 @@ import { GroupsService } from './groups.service';
 import { RoundService } from './round.service';
 import { PayoutService } from './payout.service';
 import { Group } from './entities/group.entity';
+import { GroupTemplate } from './entities/group-template.entity';
 import { Membership } from '../memberships/entities/membership.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -22,6 +23,8 @@ import { Announcement } from './entities/announcement.entity';
 import { AnnouncementsService } from './announcements.service';
 import { AnnouncementsController } from './announcements.controller';
 import { AuditModule } from '../audit/audit.module';
+import { GroupTemplatesService } from './group-templates.service';
+import { GroupTemplatesController } from './group-templates.controller';
 
 /**
  * GroupsModule manages ROSCA group entities in the database.
@@ -30,14 +33,14 @@ import { AuditModule } from '../audit/audit.module';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Group, Membership, PayoutTransaction, GroupInvite, User, Announcement]),
+    TypeOrmModule.forFeature([Group, GroupTemplate, Membership, PayoutTransaction, GroupInvite, User, Announcement]),
     NotificationsModule,
     StellarModule,
     QueueModule,
     MailModule,
     AuditModule,
   ],
-  controllers: [GroupsController, GroupsV2Controller, GroupInviteController, AnnouncementsController],
+  controllers: [GroupsController, GroupsV2Controller, GroupInviteController, AnnouncementsController, GroupTemplatesController],
   providers: [
     GroupsService,
     RoundService,
@@ -46,7 +49,8 @@ import { AuditModule } from '../audit/audit.module';
     JwtAuthGuard,
     GroupInviteService,
     AnnouncementsService,
+    GroupTemplatesService,
   ],
-  exports: [GroupsService, RoundService, PayoutService, GroupInviteService],
+  exports: [GroupsService, RoundService, PayoutService, GroupInviteService, GroupTemplatesService],
 })
 export class GroupsModule {}
