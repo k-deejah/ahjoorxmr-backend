@@ -20,6 +20,7 @@ import { StellarService } from '../../stellar/stellar.service';
 import { AuditService } from '../../audit/audit.service';
 import { TransferAdminDto } from '../dto/transfer-admin.dto';
 import { ConfigService } from '@nestjs/config';
+import { GroupTemplatesService } from '../group-templates.service';
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -110,22 +111,28 @@ describe('GroupsService', () => {
   let stellarService: Partial<StellarService>;
   let auditService: Partial<AuditService>;
   let mockDataSource: Partial<DataSource>;
+  let groupTemplatesService: Partial<GroupTemplatesService>;
 
-  beforeEach(async () => {
-    groupRepository = createMockRepository<Group>();
-    membershipRepository = createMockRepository<Membership>();
-    logger = createMockLogger();
-    notificationsService = {
-      notify: jest.fn().mockResolvedValue({}),
-      notifyBatch: jest.fn().mockResolvedValue([]),
-    };
-    stellarService = {
-      deployRoscaContract: jest.fn().mockResolvedValue('CFAKEADDRESS123'),
-      disbursePayout: jest.fn().mockResolvedValue('TX_HASH_MOCK'),
-    };
-    auditService = {
-      createLog: jest.fn().mockResolvedValue({}),
-    };
+   beforeEach(async () => {
+     groupRepository = createMockRepository<Group>();
+     membershipRepository = createMockRepository<Membership>();
+     logger = createMockLogger();
+     notificationsService = {
+       notify: jest.fn().mockResolvedValue({}),
+       notifyBatch: jest.fn().mockResolvedValue([]),
+     };
+     stellarService = {
+       deployRoscaContract: jest.fn().mockResolvedValue('CFAKEADDRESS123'),
+       disbursePayout: jest.fn().mockResolvedValue('TX_HASH_MOCK'),
+     };
+     auditService = {
+       createLog: jest.fn().mockResolvedValue({}),
+     };
+     groupTemplatesService = {
+       findTemplateById: jest.fn(),
+       mergeTemplateConfig: jest.fn().mockImplementation((template, dto) => dto),
+       incrementUsageCount: jest.fn(),
+     };
 
     // Default DataSource mock: transaction callback runs immediately
     const mockEntityManager = {
@@ -141,45 +148,49 @@ describe('GroupsService', () => {
       transaction: jest.fn().mockImplementation((cb) => cb(mockEntityManager)),
     } as any;
 
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        GroupsService,
-        {
-          provide: getRepositoryToken(Group),
-          useValue: groupRepository,
-        },
-        {
-          provide: getRepositoryToken(Membership),
-          useValue: membershipRepository,
-        },
-        {
-          provide: WinstonLogger,
-          useValue: logger,
-        },
-        {
-          provide: NotificationsService,
-          useValue: notificationsService,
-        },
-        {
-          provide: StellarService,
-          useValue: stellarService,
-        },
-        {
-          provide: AuditService,
-          useValue: auditService,
-        },
-        {
-          provide: DataSource,
-          useValue: mockDataSource,
-        },
-        {
-          provide: ConfigService,
-          useValue: {
-            get: jest.fn(),
-          },
-        },
-      ],
-    }).compile();
+     const module: TestingModule = await Test.createTestingModule({
+       providers: [
+         GroupsService,
+         {
+           provide: getRepositoryToken(Group),
+           useValue: groupRepository,
+         },
+         {
+           provide: getRepositoryToken(Membership),
+           useValue: membershipRepository,
+         },
+         {
+           provide: WinstonLogger,
+           useValue: logger,
+         },
+         {
+           provide: NotificationsService,
+           useValue: notificationsService,
+         },
+         {
+           provide: StellarService,
+           useValue: stellarService,
+         },
+         {
+           provide: AuditService,
+           useValue: auditService,
+         },
+         {
+           provide: DataSource,
+           useValue: mockDataSource,
+         },
+         {
+           provide: ConfigService,
+           useValue: {
+             get: jest.fn(),
+           },
+         },
+         {
+           provide: GroupTemplatesService,
+           useValue: groupTemplatesService,
+         },
+       ],
+     }).compile();
 
     service = module.get<GroupsService>(GroupsService);
   });
@@ -330,6 +341,53 @@ describe('GroupsService', () => {
         'DB failure',
       );
       expect(logger.error).toHaveBeenCalled();
+    });
+
+    it('should apply template configuration and increment usage count when templateId is provided', async () => {
+      const templateId = 'temp-uuid';
+      const mockTemplate = {
+        id: templateId,
+        config: {
+          contributionAmount: '200.00',
+          roundDuration: 2592000,
+          totalRounds: 12,
+          maxMembers: 12,
+          minMembers: 3,
+          assetCode: 'USDC',
+          assetIssuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+          payoutOrderStrategy: 'SEQUENTIAL',
+          penaltyRate: 0.05,
+          gracePeriodHours: 24,
+          timezone: 'UTC',
+        },
+        isPublic: false,
+        ownerId: BASE_USER_ID,
+      } as any;
+
+      (groupTemplatesService.findTemplateById as jest.Mock).mockResolvedValue(mockTemplate);
+      (groupTemplatesService.mergeTemplateConfig as jest.Mock).mockReturnValue({
+        ...dto,
+        assetCode: 'USDC',
+        assetIssuer: 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN',
+        payoutOrderStrategy: 'SEQUENTIAL',
+        penaltyRate: 0.05,
+        gracePeriodHours: 24,
+        timezone: 'UTC',
+      });
+
+      const mockSavedGroup = createMockGroup();
+      groupRepository.create!.mockReturnValue(mockSavedGroup);
+      groupRepository.save!.mockResolvedValue(mockSavedGroup);
+
+      await service.createGroup(
+        { ...dto, templateId } as any,
+        ADMIN_WALLET,
+        BASE_USER_ID,
+      );
+
+      expect(groupTemplatesService.findTemplateById).toHaveBeenCalledWith(templateId, BASE_USER_ID);
+      expect(groupTemplatesService.mergeTemplateConfig).toHaveBeenCalledWith(mockTemplate, expect.objectContaining({ templateId }));
+      expect(groupTemplatesService.incrementUsageCount).toHaveBeenCalledWith(templateId);
     });
   });
 

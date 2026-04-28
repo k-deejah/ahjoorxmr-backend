@@ -78,6 +78,17 @@ export interface ReconcilePayoutJobData {
 }
 
 // ---------------------------------------------------------------------------
+// Push Notification Queue Job Data
+// ---------------------------------------------------------------------------
+export interface SendPushNotificationJobData {
+  userId: string;
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  notificationType: string;
+}
+
+// ---------------------------------------------------------------------------
 // Dead-letter Queue Job Data
 // ---------------------------------------------------------------------------
 export interface DeadLetterJobData {

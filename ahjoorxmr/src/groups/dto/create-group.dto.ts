@@ -114,4 +114,36 @@ export class CreateGroupDto {
   @IsOptional()
   @IsDateString()
   endDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Payout order strategy (e.g., SEQUENTIAL, RANDOM)',
+    example: 'SEQUENTIAL',
+  })
+  @IsOptional()
+  @IsString()
+  payoutOrderStrategy?: string;
+
+  @ApiPropertyOptional({
+    description: 'Penalty rate for missed contributions (0-1)',
+    example: 0.05,
+  })
+  @IsOptional()
+  penaltyRate?: number;
+
+  @ApiPropertyOptional({
+    description: 'Grace period in hours before a member is penalized',
+    example: 24,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  gracePeriodHours?: number;
+
+  @ApiPropertyOptional({
+    description: 'UUID of a group template to use as base configuration. When provided, template config is merged as defaults (explicit DTO fields override template values).',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsOptional()
+  @IsString()
+  templateId?: string;
 }

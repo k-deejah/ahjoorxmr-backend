@@ -113,9 +113,11 @@ export class GroupsController {
     @Body() createGroupDto: CreateGroupDto,
   ): Promise<GroupResponseDto> {
     const adminWallet = req.user.walletAddress || req.user.id;
+    const userId = req.user.id;
     const group = await this.groupsService.createGroup(
       createGroupDto,
       adminWallet,
+      userId,
     );
     return this.toGroupResponse(group);
   }

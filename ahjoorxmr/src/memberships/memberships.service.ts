@@ -16,6 +16,7 @@ import { MembershipStatus } from './entities/membership-status.enum';
 import { NotificationsService } from '../notification/notifications.service';
 import { NotificationType } from '../notification/notification-type.enum';
 import { GroupStatus } from '../groups/entities/group-status.enum';
+import { WaitlistService } from '../waitlist/waitlist.service';
 
 /**
  * Service responsible for managing membership operations in ROSCA groups.
@@ -30,6 +31,7 @@ export class MembershipsService {
     private readonly groupRepository: Repository<Group>,
     private readonly logger: WinstonLogger,
     private readonly notificationsService: NotificationsService,
+    private readonly waitlistService: WaitlistService,
   ) {}
 
   /**
@@ -266,6 +268,17 @@ export class MembershipsService {
         `Member ${userId} removed from group ${groupId} with membership id ${membership.id}`,
         'MembershipsService',
       );
+
+      // Admit next waitlisted user if one exists
+      setImmediate(() =>
+        this.waitlistService.admitNextFromWaitlist(groupId).catch((err) =>
+          this.logger.error(
+            `Failed to admit from waitlist after removal in group ${groupId}: ${err.message}`,
+            err.stack,
+            'MembershipsService',
+          ),
+        ),
+      );
     } catch (error) {
       // Re-throw known exceptions
       if (
@@ -384,6 +397,17 @@ export class MembershipsService {
 
       // Delete membership from database
       await this.membershipRepository.remove(membership);
+
+      // Admit next waitlisted user if one exists
+      setImmediate(() =>
+        this.waitlistService.admitNextFromWaitlist(groupId).catch((err) =>
+          this.logger.error(
+            `Failed to admit from waitlist after leave in group ${groupId}: ${err.message}`,
+            err.stack,
+            'MembershipsService',
+          ),
+        ),
+      );
 
       // Re-sequence payoutOrder for remaining members
       const remainingMembers = await this.membershipRepository.find({
@@ -605,6 +629,17 @@ export class MembershipsService {
       body: `Your membership in group "${group.name}" has been suspended. Reason: ${reason}`,
       metadata: { groupId, reason, adminId: requestingUserId },
     });
+
+    // A suspended member frees a slot — admit next from waitlist
+    setImmediate(() =>
+      this.waitlistService.admitNextFromWaitlist(groupId).catch((err) =>
+        this.logger.error(
+          `Failed to admit from waitlist after suspension in group ${groupId}: ${err.message}`,
+          err.stack,
+          'MembershipsService',
+        ),
+      ),
+    );
 
     this.logger.log(
       `Member ${targetUserId} suspended in group ${groupId} by ${requestingUserId}`,

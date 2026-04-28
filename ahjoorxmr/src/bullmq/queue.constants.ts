@@ -6,6 +6,7 @@ export const QUEUE_NAMES = {
   WEBHOOK_DELIVERY: 'webhook-delivery-queue',
   DEAD_LETTER: 'dead-letter-queue',
   TX_CONFIRMATION: 'tx-confirmation-queue',
+  PUSH_NOTIFICATION: 'push-notification-queue',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -33,6 +34,9 @@ export const JOB_NAMES = {
 
   // Transaction confirmation
   CONFIRM_TRANSACTION: 'confirm-transaction',
+
+  // Push notification jobs
+  SEND_PUSH: 'send-push',
 
   // Dead-letter
   DEAD_LETTER: 'dead-letter',
