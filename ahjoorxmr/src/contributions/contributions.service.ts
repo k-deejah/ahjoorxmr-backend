@@ -2,11 +2,14 @@ import {
   Injectable,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
 import { Contribution } from './entities/contribution.entity';
 import { Group } from '../groups/entities/group.entity';
+import { Membership } from '../memberships/entities/membership.entity';
+import { MembershipStatus } from '../memberships/entities/membership-status.enum';
 import { GroupStatus } from '../groups/entities/group-status.enum';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import { CreateContributionDto } from './dto/create-contribution.dto';
@@ -29,6 +32,8 @@ export class ContributionsService {
     private readonly contributionRepository: Repository<Contribution>,
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
+    @InjectRepository(Membership)
+    private readonly membershipRepository: Repository<Membership>,
     private readonly logger: WinstonLogger,
     private readonly stellarService: StellarService,
     private readonly configService: ConfigService,
@@ -83,6 +88,14 @@ export class ContributionsService {
     try {
       // Validate group exists and fetch it
       const group = await this.validateGroupExists(groupId);
+
+      // Check membership status — suspended members cannot contribute
+      const membership = await this.membershipRepository.findOne({
+        where: { groupId, userId },
+      });
+      if (membership?.status === MembershipStatus.SUSPENDED) {
+        throw new ForbiddenException('Suspended members cannot submit contributions');
+      }
 
       // Validate group status is ACTIVE
       if (group.status !== GroupStatus.ACTIVE) {

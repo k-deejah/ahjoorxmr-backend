@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job, Queue } from 'bullmq';
+import { context, trace } from '@opentelemetry/api';
 import {
   QUEUE_NAMES,
   JOB_NAMES,
@@ -20,6 +21,7 @@ import { StellarService } from '../stellar/stellar.service';
 import { Group } from '../groups/entities/group.entity';
 import { GroupStatus } from '../groups/entities/group-status.enum';
 import { RedlockService } from '../common/redis/redlock.service';
+import { extractTraceContext } from '../common/tracing/stellar-tracing';
 
 @Processor(QUEUE_NAMES.GROUP_SYNC, { concurrency: 2 })
 export class GroupSyncProcessor extends WorkerHost {
@@ -57,14 +59,21 @@ export class GroupSyncProcessor extends WorkerHost {
   async process(job: Job): Promise<unknown> {
     this.logger.debug(`Processing group-sync job [${job.name}] id=${job.id}`);
 
-    switch (job.name) {
-      case JOB_NAMES.SYNC_GROUP_STATE:
-        return this.handleSyncGroupState(job as Job<SyncGroupStateJobData>);
-      case JOB_NAMES.SYNC_ALL_GROUPS:
-        return this.handleSyncAllGroups(job as Job<SyncAllGroupsJobData>);
-      default:
-        throw new Error(`Unknown group-sync job type: ${job.name}`);
-    }
+    // Restore W3C trace context propagated from the enqueuing request
+    const traceCarrier: Record<string, string> =
+      (job.data as any)._traceContext ?? {};
+    const parentCtx = extractTraceContext(traceCarrier);
+
+    return context.with(parentCtx, () => {
+      switch (job.name) {
+        case JOB_NAMES.SYNC_GROUP_STATE:
+          return this.handleSyncGroupState(job as Job<SyncGroupStateJobData>);
+        case JOB_NAMES.SYNC_ALL_GROUPS:
+          return this.handleSyncAllGroups(job as Job<SyncAllGroupsJobData>);
+        default:
+          throw new Error(`Unknown group-sync job type: ${job.name}`);
+      }
+    });
   }
 
   private async handleSyncGroupState(

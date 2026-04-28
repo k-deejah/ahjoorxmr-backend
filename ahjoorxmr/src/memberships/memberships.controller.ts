@@ -344,4 +344,75 @@ export class MembershipsController {
       updatedAt: membership.updatedAt.toISOString(),
     };
   }
+
+  @Patch(':id/members/:userId/suspend')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Suspend a group member (group admin only)' })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiParam({ name: 'userId', description: 'Target user UUID', format: 'uuid' })
+  @ApiBody({ schema: { properties: { reason: { type: 'string' } }, required: ['reason'] } })
+  @ApiResponse({ status: 200, description: 'Member suspended', type: MembershipResponseDto })
+  @ApiResponse({ status: 403, description: 'Forbidden', type: ErrorResponseDto })
+  @AuditLog({ action: 'SUSPEND', resource: 'MEMBERSHIP' })
+  async suspendMember(
+    @Param('id', ParseUUIDPipe) groupId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body('reason') reason: string,
+    @Request() req: any,
+  ): Promise<MembershipResponseDto> {
+    const membership = await this.membershipsService.suspendMember(
+      groupId,
+      userId,
+      req.user.userId,
+      reason,
+    );
+    return {
+      id: membership.id,
+      groupId: membership.groupId,
+      userId: membership.userId,
+      walletAddress: membership.walletAddress,
+      payoutOrder: membership.payoutOrder,
+      hasReceivedPayout: membership.hasReceivedPayout,
+      hasPaidCurrentRound: membership.hasPaidCurrentRound,
+      transactionHash: membership.transactionHash,
+      status: membership.status,
+      createdAt: membership.createdAt.toISOString(),
+      updatedAt: membership.updatedAt.toISOString(),
+    };
+  }
+
+  @Patch(':id/members/:userId/reinstate')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reinstate a suspended group member (group admin only)' })
+  @ApiParam({ name: 'id', description: 'Group UUID', format: 'uuid' })
+  @ApiParam({ name: 'userId', description: 'Target user UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Member reinstated', type: MembershipResponseDto })
+  @ApiResponse({ status: 403, description: 'Forbidden', type: ErrorResponseDto })
+  @AuditLog({ action: 'REINSTATE', resource: 'MEMBERSHIP' })
+  async reinstateMember(
+    @Param('id', ParseUUIDPipe) groupId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Request() req: any,
+  ): Promise<MembershipResponseDto> {
+    const membership = await this.membershipsService.reinstateMember(
+      groupId,
+      userId,
+      req.user.userId,
+    );
+    return {
+      id: membership.id,
+      groupId: membership.groupId,
+      userId: membership.userId,
+      walletAddress: membership.walletAddress,
+      payoutOrder: membership.payoutOrder,
+      hasReceivedPayout: membership.hasReceivedPayout,
+      hasPaidCurrentRound: membership.hasPaidCurrentRound,
+      transactionHash: membership.transactionHash,
+      status: membership.status,
+      createdAt: membership.createdAt.toISOString(),
+      updatedAt: membership.updatedAt.toISOString(),
+    };
+  }
 }

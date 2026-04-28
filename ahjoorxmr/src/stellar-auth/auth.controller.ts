@@ -25,7 +25,7 @@ export class AuthController {
   @Public()
   @Post('challenge')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 20, ttl: 300000 } })
+  @Throttle({ auth: { limit: 10, ttl: 60000 } })
   async challenge(
     @Body() dto: ChallengeRequestDto,
   ): Promise<ChallengeResponseDto> {

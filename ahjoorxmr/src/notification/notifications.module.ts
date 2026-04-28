@@ -9,6 +9,7 @@ import { Notification } from './notification.entity';
 import { NotificationsService } from './notifications.service';
 import { NotificationsController } from './notifications.controller';
 import { SseAdminController } from './sse-admin.controller';
+import { NotificationsGateway } from './notifications.gateway';
 
 @Module({
   imports: [
@@ -16,7 +17,8 @@ import { SseAdminController } from './sse-admin.controller';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
+        secret:
+          config.get<string>('JWT_ACCESS_SECRET') || 'default_access_secret',
       }),
       inject: [ConfigService],
     }),
@@ -38,16 +40,14 @@ import { SseAdminController } from './sse-admin.controller';
         template: {
           dir: path.join(__dirname, 'templates'),
           adapter: new HandlebarsAdapter(),
-          options: {
-            strict: true,
-          },
+          options: { strict: true },
         },
       }),
       inject: [ConfigService],
     }),
   ],
   controllers: [NotificationsController, SseAdminController],
-  providers: [NotificationsService, NotificationsController],
-  exports: [NotificationsService],
+  providers: [NotificationsService, NotificationsController, NotificationsGateway],
+  exports: [NotificationsService, NotificationsGateway],
 })
 export class NotificationsModule {}

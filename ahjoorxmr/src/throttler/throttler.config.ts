@@ -8,28 +8,34 @@ export const throttlerConfig: ThrottlerModuleOptions = {
   throttlers: [
     {
       name: 'default',
-      ttl: parseInt(process.env.THROTTLE_TTL || '60000', 10), // 1 minute
-      limit: parseInt(process.env.THROTTLE_LIMIT || '100', 10), // 100 requests per minute
+      ttl: parseInt(process.env.THROTTLE_TTL || '60000', 10),
+      limit: parseInt(process.env.THROTTLE_LIMIT || '100', 10),
     },
     {
       name: 'authenticated',
       ttl: parseInt(process.env.THROTTLE_TTL_AUTHENTICATED || '60000', 10),
-      limit: parseInt(process.env.THROTTLE_LIMIT_AUTHENTICATED || '200', 10), // Higher limit for authenticated users
+      limit: parseInt(process.env.THROTTLE_LIMIT_AUTHENTICATED || '200', 10),
+    },
+    {
+      // Stricter named throttler for auth endpoints (#182)
+      name: 'auth',
+      ttl: parseInt(process.env.AUTH_LOGIN_TTL || '60000', 10),
+      limit: parseInt(process.env.AUTH_LOGIN_LIMIT || '10', 10),
     },
     {
       name: 'short',
-      ttl: 1000, // 1 second
-      limit: 10, // 10 requests per second (burst protection)
+      ttl: 1000,
+      limit: 10,
     },
     {
       name: 'strict',
-      ttl: 60000, // 1 minute
-      limit: 5, // Very strict for sensitive operations
+      ttl: 60000,
+      limit: 5,
     },
     {
       name: 'public',
       ttl: 60000,
-      limit: 500, // Lenient for public read endpoints
+      limit: 500,
     },
   ],
   // Error message customization

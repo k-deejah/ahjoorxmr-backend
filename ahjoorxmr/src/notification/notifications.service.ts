@@ -3,6 +3,8 @@ import {
   Logger,
   NotFoundException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThan } from 'typeorm';
@@ -16,6 +18,7 @@ import {
 } from './notifications.dto';
 import { UseReadReplica } from '../common/decorators/read-replica.decorator';
 import { RedisService } from '../common/redis/redis.service';
+import { NotificationsGateway } from './notifications.gateway';
 
 export interface PaginatedResult<T> {
   data: T[];
@@ -40,6 +43,8 @@ export class NotificationsService {
     private readonly notificationRepo: Repository<Notification>,
     private readonly mailerService: MailerService,
     private readonly redisService: RedisService,
+    @Inject(forwardRef(() => NotificationsGateway))
+    private readonly gateway: NotificationsGateway,
   ) {}
 
   /**
@@ -63,6 +68,9 @@ export class NotificationsService {
       .getClient()
       .publish(`notifications:${dto.userId}`, JSON.stringify(saved))
       .catch((err) => this.logger.error(`Redis publish failed: ${err.message}`));
+
+    // Push via WebSocket immediately after persisting
+    this.gateway.emitNotification(dto.userId, saved);
 
     if (dto.sendEmail && dto.emailTo) {
       setImmediate(() =>

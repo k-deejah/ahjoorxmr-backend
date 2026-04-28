@@ -11,9 +11,11 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
   Request,
+  Res,
   Version,
   UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -26,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { ContributionsService } from './contributions.service';
+import { ReceiptService } from './receipt.service';
 import { CreateContributionDto } from './dto/create-contribution.dto';
 import { ContributionResponseDto } from './dto/contribution-response.dto';
 import { GetContributionsQueryDto } from './dto/get-contributions-query.dto';
@@ -46,7 +49,10 @@ import {
 @ApiTags('Contributions')
 @Controller()
 export class ContributionsController {
-  constructor(private readonly contributionsService: ContributionsService) {}
+  constructor(
+    private readonly contributionsService: ContributionsService,
+    private readonly receiptService: ReceiptService,
+  ) {}
 
   /**
    * Creates a new contribution record (internal endpoint).
@@ -270,5 +276,21 @@ export class ContributionsController {
       createdAt: contribution.createdAt.toISOString(),
       updatedAt: contribution.updatedAt.toISOString(),
     }));
+  }
+
+  @Get('contributions/:id/receipt')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Download PDF receipt for a contribution (owner or admin only)' })
+  @ApiParam({ name: 'id', description: 'Contribution UUID', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'PDF receipt streamed successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied', type: ErrorResponseDto })
+  @ApiResponse({ status: 404, description: 'Contribution not found', type: ErrorResponseDto })
+  async downloadReceipt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: { user: { id: string; userId: string } },
+    @Res() res: Response,
+  ): Promise<void> {
+    const userId = req.user.id || req.user.userId;
+    await this.receiptService.streamReceiptPdf(id, userId, res);
   }
 }

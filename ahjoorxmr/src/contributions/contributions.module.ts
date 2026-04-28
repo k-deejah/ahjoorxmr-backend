@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ContributionsController } from './contributions.controller';
 import { ContributionsService } from './contributions.service';
+import { ReceiptService } from './receipt.service';
 import { Contribution } from './entities/contribution.entity';
 import { Group } from '../groups/entities/group.entity';
 import { Membership } from '../memberships/entities/membership.entity';
@@ -32,7 +33,7 @@ import { QueueModule } from '../bullmq/queue.module';
     forwardRef(() => QueueModule),
   ],
   controllers: [ContributionsController],
-  providers: [ContributionsService, WinstonLogger, ApiKeyGuard, JwtAuthGuard],
+  providers: [ContributionsService, ReceiptService, WinstonLogger, ApiKeyGuard, JwtAuthGuard],
   exports: [ContributionsService],
 })
 export class ContributionsModule {}
