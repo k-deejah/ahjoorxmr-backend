@@ -8,6 +8,7 @@ import { User } from '../users/entities/user.entity';
 import { WinstonLogger } from '../common/logger/winston.logger';
 import { NotificationsModule } from '../notification/notifications.module';
 import { JwtAuthGuard } from '../groups/guards/jwt-auth.guard';
+import { WaitlistModule } from '../waitlist/waitlist.module';
 
 /**
  * MembershipsModule manages the relationship between users and ROSCA groups.
@@ -18,6 +19,7 @@ import { JwtAuthGuard } from '../groups/guards/jwt-auth.guard';
   imports: [
     TypeOrmModule.forFeature([Membership, Group, User]),
     NotificationsModule,
+    WaitlistModule,
   ],
   controllers: [MembershipsController],
   providers: [MembershipsService, WinstonLogger, JwtAuthGuard],
