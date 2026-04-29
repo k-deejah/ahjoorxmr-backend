@@ -55,6 +55,10 @@ import { PenaltiesModule } from './penalties/penalties.module';
 import { Penalty } from './penalties/entities/penalty.entity';
 import { NotificationPreference } from './notification/notification-preference.entity';
 import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
+import { WaitlistModule } from './waitlist/waitlist.module';
+import { GroupWaitlist } from './waitlist/entities/group-waitlist.entity';
+import { TrustScoreModule } from './trust-score/trust-score.module';
+import { MemberTrustScore } from './trust-score/entities/member-trust-score.entity';
 
 @Module({
   imports: [
@@ -92,6 +96,8 @@ import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
             GroupInvite,
             Penalty,
             NotificationPreference,
+            GroupWaitlist,
+            MemberTrustScore,
           ],
           synchronize: isDevelopment, // Auto-create tables only in development
           logging: isDevelopment, // Enable logging only in development
@@ -139,6 +145,8 @@ import { MaintenanceModeGuard } from './common/guards/maintenance-mode.guard';
     WebhookModule,
     AdminModule,
     PenaltiesModule,
+    WaitlistModule,
+    TrustScoreModule,
   ],
   controllers: [AppController],
   providers: [
